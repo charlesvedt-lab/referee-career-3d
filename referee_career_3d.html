@@ -80,8 +80,7 @@
     pointer-events: auto;
   }
   .team-badge { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 15px; }
-  .dot-ars { width: 12px; height: 12px; border-radius: 50%; background: #ef4444; border: 2px solid #fff; }
-  .dot-che { width: 12px; height: 12px; border-radius: 50%; background: #2563eb; border: 2px solid #fff; }
+  .team-dot { width: 12px; height: 12px; border-radius: 50%; background: #ef4444; border: 2px solid #fff; display: inline-block; }
   .red-count {
     background: #dc2626; color: #fff; font-size: 10px; font-weight: 900;
     padding: 1px 5px; border-radius: 4px; display: none;
@@ -331,9 +330,9 @@
 <!-- HUD Supérieur -->
 <div class="hud-top">
   <div class="scoreboard">
-    <div class="team-badge"><span class="dot-ars"></span>ARS <span class="red-count" id="red-ars">🟥1</span></div>
+    <div class="team-badge"><span class="team-dot" id="team-dot-0"></span><span id="team-name-0">---</span> <span class="red-count" id="red-0" style="display:none;">🟥x1</span></div>
     <div class="score-box" id="hud-score">0 - 0</div>
-    <div class="team-badge"><span class="red-count" id="red-che">🟥1</span> CHE<span class="dot-che"></span></div>
+    <div class="team-badge"><span class="red-count" id="red-1" style="display:none;">🟥x1</span> <span id="team-name-1">---</span><span class="team-dot" id="team-dot-1"></span></div>
     <div class="clock-pill" id="hud-clock">00:00</div>
   </div>
 
@@ -368,10 +367,10 @@
 <!-- Radar & Journal -->
 <div class="hud-bottom-left">
   <canvas id="minimap" width="175" height="114"></canvas>
-  <div class="log-box" id="match-log">
-    <div class="log-entry">🏟️ Bienvenue à l'Emirates Stadium. Coup d'envoi imminent.</div>
-  </div>
+  <div class="log-box" id="match-log"></div>
 </div>
+
+<div id="match-subtitle" style="position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:5; font-size:12px; font-weight:700; letter-spacing:0.6px; color:rgba(226,232,240,0.85); text-shadow:0 2px 6px rgba(0,0,0,0.7); white-space:nowrap;">Chargement des équipes…</div>
 
 <!-- Barre d'actions principales -->
 <div class="hud-controls">
@@ -618,6 +617,7 @@ const state = {
   stamina: 100,
   selectedPlayer: null,
   activeIncident: null,
+  scenario: null,
   incidentTimer: 7,
   whistleBallPos: new THREE.Vector3(0, 0.22, 0),
   setPiece: null,
@@ -753,26 +753,49 @@ function buildStadium() {
   pitch.receiveShadow = true;
   scene.add(pitch);
 
-  const advMatRed = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.5 });
-  const advMatBlue = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 });
-  for (let i = -4; i <= 4; i++) {
-    const b1 = new THREE.Mesh(new THREE.BoxGeometry(8.5, 1.05, 0.35), i % 2 === 0 ? advMatRed : advMatBlue);
-    b1.position.set(i * 9.5, 0.52, -PITCH_L / 2 - 4.2);
-    scene.add(b1);
-
-    const b2 = new THREE.Mesh(new THREE.BoxGeometry(8.5, 1.05, 0.35), i % 2 === 0 ? advMatBlue : advMatRed);
-    b2.position.set(i * 9.5, 0.52, PITCH_L / 2 + 4.2);
-    scene.add(b2);
+  const adsCanvas = document.createElement('canvas');
+  adsCanvas.width = 1024;
+  adsCanvas.height = 64;
+  const adsCtx = adsCanvas.getContext('2d');
+  adsCtx.fillStyle = '#0b1220';
+  adsCtx.fillRect(0, 0, 1024, 64);
+  adsCtx.fillStyle = '#22d3ee';
+  adsCtx.font = '900 30px Arial, sans-serif';
+  adsCtx.textBaseline = 'middle';
+  const adsText = 'REFEREE CAREER 3D   -   FAIR PLAY   -   VAR READY   -   ARBITRAGE PRO   -   ';
+  let adsX = 8;
+  for (let i = 0; i < 3; i++) {
+    adsCtx.fillText(adsText, adsX, 33);
+    adsX += adsCtx.measureText(adsText).width || 460;
   }
-  for (let j = -3; j <= 3; j++) {
-    const b3 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.05, 9.5), j % 2 === 0 ? advMatRed : advMatBlue);
-    b3.position.set(-PITCH_W / 2 - 4.2, 0.52, j * 11.5);
-    scene.add(b3);
+  const adsTex = new THREE.CanvasTexture(adsCanvas);
+  adsTex.wrapS = THREE.RepeatWrapping;
+  adsTex.repeat.x = 2;
+  const adsMat = new THREE.MeshStandardMaterial({ map: adsTex, roughness: 0.6 });
 
-    const b4 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.05, 9.5), j % 2 === 0 ? advMatBlue : advMatRed);
-    b4.position.set(PITCH_W / 2 + 4.2, 0.52, j * 11.5);
-    scene.add(b4);
-  }
+  const boardNS = new THREE.Mesh(new THREE.BoxGeometry(100, 0.95, 0.25), adsMat);
+  boardNS.position.set(0, 0.48, -PITCH_L / 2 - 3.4);
+  scene.add(boardNS);
+  const boardNS2 = boardNS.clone();
+  boardNS2.position.z = PITCH_L / 2 + 3.4;
+  scene.add(boardNS2);
+
+  const boardEWGeo = new THREE.BoxGeometry(0.25, 0.95, 60);
+  const boardEW1 = new THREE.Mesh(boardEWGeo, adsMat);
+  boardEW1.position.set(-PITCH_W / 2 - 3.4, 0.48, 0);
+  scene.add(boardEW1);
+  const boardEW2 = new THREE.Mesh(boardEWGeo, adsMat);
+  boardEW2.position.set(PITCH_W / 2 + 3.4, 0.48, 0);
+  scene.add(boardEW2);
+
+  const dugMat = new THREE.MeshStandardMaterial({ color: 0x0b1220, roughness: 0.75, transparent: true, opacity: 0.82 });
+  const dugoutGeo = new THREE.BoxGeometry(1.7, 1.55, 8);
+  const dugA = new THREE.Mesh(dugoutGeo, dugMat);
+  dugA.position.set(-PITCH_W / 2 - 2.3, 0.78, -7);
+  scene.add(dugA);
+  const dugB = new THREE.Mesh(dugoutGeo, dugMat);
+  dugB.position.set(-PITCH_W / 2 - 2.3, 0.78, 7);
+  scene.add(dugB);
 
   const tierColors = [0x1e293b, 0x334155, 0x0f172a];
   for (let tier = 0; tier < 3; tier++) {
@@ -802,9 +825,9 @@ function buildStadium() {
     scene.add(sEast);
   }
 
-  const crowdCount = 420;
-  const crowdGeo = new THREE.BoxGeometry(0.55, 0.65, 0.45);
-  const crowdPalette = [0xf87171, 0x60a5fa, 0xfbbf24, 0xf8fafc, 0xc084fc, 0x34d399];
+  const crowdCount = 1150;
+  const crowdGeo = new THREE.BoxGeometry(0.42, 0.52, 0.34);
+  const crowdPalette = [0xf87171, 0x60a5fa, 0xfbbf24, 0xf8fafc, 0xc084fc, 0x34d399, 0x94a3b8];
   const crowdInst = new THREE.InstancedMesh(
     crowdGeo,
     new THREE.MeshStandardMaterial({ roughness: 0.8 }),
@@ -814,13 +837,15 @@ function buildStadium() {
   for (let i = 0; i < crowdCount; i++) {
     const side = i % 4;
     const tier = i % 3;
-    const spread = ((i * 37) % 90) - 45;
-    const y = 3.2 + tier * 3.5;
-    if (side === 0) dummy.position.set(spread, y, -PITCH_L / 2 - 11.2 - tier * 5.0);
-    else if (side === 1) dummy.position.set(spread, y, PITCH_L / 2 + 11.2 + tier * 5.0);
-    else if (side === 2) dummy.position.set(-PITCH_W / 2 - 11.2 - tier * 5.0, y, spread * 1.15);
-    else dummy.position.set(PITCH_W / 2 + 11.2 + tier * 5.0, y, spread * 1.15);
-    dummy.rotation.set(0, (i % 7) * 0.2, 0);
+    const span = 108 + tier * 10;
+    const spread = (((i * 41) % 56) / 56 - 0.5) * span;
+    const y = 3.1 + tier * 3.5 + ((i * 13) % 7) * 0.25;
+    const rowExtra = ((i * 7) % 3) * 1.4;
+    if (side === 0) dummy.position.set(spread, y, -PITCH_L / 2 - 11.2 - tier * 5.0 - rowExtra);
+    else if (side === 1) dummy.position.set(spread, y, PITCH_L / 2 + 11.2 + tier * 5.0 + rowExtra);
+    else if (side === 2) dummy.position.set(-PITCH_W / 2 - 11.2 - tier * 5.0 - rowExtra, y, spread * 1.15);
+    else dummy.position.set(PITCH_W / 2 + 11.2 + tier * 5.0 + rowExtra, y, spread * 1.15);
+    dummy.rotation.set(0, (i % 7) * 0.25, 0);
     dummy.updateMatrix();
     crowdInst.setMatrixAt(i, dummy.matrix);
     crowdInst.setColorAt(i, new THREE.Color(crowdPalette[i % crowdPalette.length]));
@@ -828,6 +853,27 @@ function buildStadium() {
   crowdInst.instanceMatrix.needsUpdate = true;
   if (crowdInst.instanceColor) crowdInst.instanceColor.needsUpdate = true;
   scene.add(crowdInst);
+
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x0b1220, metalness: 0.2, roughness: 0.75 });
+  const roofNS1 = new THREE.Mesh(new THREE.BoxGeometry(132, 0.6, 13), roofMat);
+  roofNS1.position.set(0, 18.5, -PITCH_L / 2 - 25);
+  roofNS1.rotation.x = 0.38;
+  scene.add(roofNS1);
+  const roofNS2 = new THREE.Mesh(new THREE.BoxGeometry(132, 0.6, 13), roofMat);
+  roofNS2.position.set(0, 18.5, PITCH_L / 2 + 25);
+  roofNS2.rotation.x = -0.38;
+  scene.add(roofNS2);
+  const roofEW1 = new THREE.Mesh(new THREE.BoxGeometry(13, 0.6, 150), roofMat);
+  roofEW1.position.set(-PITCH_W / 2 - 25, 18.5, 0);
+  roofEW1.rotation.z = 0.38;
+  scene.add(roofEW1);
+  const roofEW2 = new THREE.Mesh(new THREE.BoxGeometry(13, 0.6, 150), roofMat);
+  roofEW2.position.set(PITCH_W / 2 + 25, 18.5, 0);
+  roofEW2.rotation.z = -0.38;
+  scene.add(roofEW2);
+
+  createScoreScreen(-PITCH_L / 2 - 9.8);
+  createScoreScreen(PITCH_L / 2 + 9.8);
 
   const towerPositions = [
     [-46, 0, -64], [46, 0, -64],
@@ -848,6 +894,56 @@ function buildStadium() {
 }
 
 const goalNets = [];
+const screenCanvases = [];
+
+function drawOneScreen(sc) {
+  const ctx = sc.ctx;
+  if (!ctx) return;
+  ctx.fillStyle = '#050b14';
+  ctx.fillRect(0, 0, 512, 160);
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, 506, 154);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  let mtLive = null;
+  try { mtLive = matchTeams; } catch (err) { mtLive = null; }
+  if (mtLive) {
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '900 46px Arial, sans-serif';
+    ctx.fillText(clubCode(0) + '   ' + state.score[0] + ' - ' + state.score[1] + '   ' + clubCode(1), 256, 58);
+    const mins = Math.floor(state.matchTime);
+    ctx.fillStyle = '#38d399';
+    ctx.font = '700 30px Arial, sans-serif';
+    ctx.fillText(mins <= 90 ? mins + "'" : '90+' + (mins - 90) + "'", 256, 116);
+  } else {
+    ctx.fillStyle = '#22d3ee';
+    ctx.font = '900 44px Arial, sans-serif';
+    ctx.fillText('REFEREE CAREER 3D', 256, 80);
+  }
+  sc.tex.needsUpdate = true;
+}
+
+function drawScoreScreens() {
+  screenCanvases.forEach(drawOneScreen);
+}
+
+function createScoreScreen(zPos) {
+  const scrCanvas = document.createElement('canvas');
+  scrCanvas.width = 512;
+  scrCanvas.height = 160;
+  const tex = new THREE.CanvasTexture(scrCanvas);
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(15, 4.6),
+    new THREE.MeshBasicMaterial({ map: tex })
+  );
+  mesh.position.set(0, 12.6, zPos);
+  if (zPos > 0) mesh.rotation.y = Math.PI;
+  scene.add(mesh);
+  const entry = { canvas: scrCanvas, ctx: scrCanvas.getContext('2d'), tex };
+  screenCanvases.push(entry);
+  drawOneScreen(entry);
+}
 
 function buildGoal(zPos, isNorth) {
   const goalGroup = new THREE.Group();
@@ -923,59 +1019,109 @@ buildGoal(-PITCH_L / 2, true);
 buildGoal(PITCH_L / 2, false);
 
 // --- 4. JOUEURS ARTICULÉS (GARDIENS + JOUEURS DE CHAMP) & ARBITRES DE TOUCHE ---
-const TEAM_ROSTER = {
-  ARS: [
-    { name: 'Raya', num: 22, gk: true, x: 0, z: -49 },
-    { name: 'Saliba', num: 2, gk: false, x: -9, z: -34 },
-    { name: 'Gabriel', num: 6, gk: false, x: 9, z: -34 },
-    { name: 'White', num: 4, gk: false, x: -22, z: -30 },
-    { name: 'Calafiori', num: 33, gk: false, x: 22, z: -30 },
-    { name: 'Rice', num: 41, gk: false, x: -6, z: -15 },
-    { name: 'Ødegaard', num: 8, gk: false, x: 6, z: -12 },
-    { name: 'Partey', num: 5, gk: false, x: 0, z: -22 },
-    { name: 'Saka', num: 7, gk: false, x: -18, z: -5 },
-    { name: 'Martinelli', num: 11, gk: false, x: 18, z: -5 },
-    { name: 'Havertz', num: 29, gk: false, x: 0, z: -3 }
-  ],
-  CHE: [
-    { name: 'Sánchez', num: 1, gk: true, x: 0, z: 49 },
-    { name: 'Fofana', num: 29, gk: false, x: -9, z: 34 },
-    { name: 'Colwill', num: 6, gk: false, x: 9, z: 34 },
-    { name: 'Gusto', num: 27, gk: false, x: -22, z: 30 },
-    { name: 'Cucurella', num: 3, gk: false, x: 22, z: 30 },
-    { name: 'Caicedo', num: 25, gk: false, x: -6, z: 15 },
-    { name: 'Enzo', num: 8, gk: false, x: 6, z: 12 },
-    { name: 'Lavia', num: 45, gk: false, x: 0, z: 22 },
-    { name: 'Palmer', num: 20, gk: false, x: -18, z: 5 },
-    { name: 'Madueke', num: 11, gk: false, x: 18, z: 5 },
-    { name: 'Jackson', num: 15, gk: false, x: 0, z: 3 }
-  ]
-};
+// --- CLUBS DES 5 GRANDS CHAMPIONNATS ---
+const CLUBS = [
+  { code: 'ARS', name: 'Arsenal',           league: 'Premier League',  kit: { shirt: '#dc2626', accent: '#ffffff', shorts: '#ffffff', socks: '#dc2626', gk: '#84cc16', style: 'sleeves' } },
+  { code: 'LIV', name: 'Liverpool',         league: 'Premier League',  kit: { shirt: '#c81d25', accent: '#c81d25', shorts: '#c81d25', socks: '#c81d25', gk: '#22d3ee', style: 'solid' } },
+  { code: 'MCI', name: 'Manchester City',   league: 'Premier League',  kit: { shirt: '#6cadde', accent: '#3b82f6', shorts: '#ffffff', socks: '#6cadde', gk: '#facc15', style: 'solid' } },
+  { code: 'TOT', name: 'Tottenham',         league: 'Premier League',  kit: { shirt: '#f8fafc', accent: '#132257', shorts: '#132257', socks: '#f8fafc', gk: '#22c55e', style: 'solid' } },
+  { code: 'NEW', name: 'Newcastle',         league: 'Premier League',  kit: { shirt: '#f8fafc', accent: '#111827', shorts: '#111827', socks: '#f8fafc', gk: '#a78bfa', style: 'stripes' } },
+  { code: 'RMA', name: 'Real Madrid',       league: 'Liga',            kit: { shirt: '#f8fafc', accent: '#facc15', shorts: '#f8fafc', socks: '#f8fafc', gk: '#7c3aed', style: 'solid' } },
+  { code: 'BAR', name: 'FC Barcelone',      league: 'Liga',            kit: { shirt: '#a50044', accent: '#004d98', shorts: '#1e3a8a', socks: '#a50044', gk: '#f97316', style: 'stripes' } },
+  { code: 'ATM', name: 'Atletico Madrid',   league: 'Liga',            kit: { shirt: '#cb3524', accent: '#f8fafc', shorts: '#f8fafc', socks: '#cb3524', gk: '#0ea5e9', style: 'stripes' } },
+  { code: 'SEV', name: 'Seville',           league: 'Liga',            kit: { shirt: '#f8fafc', accent: '#dc2626', shorts: '#f8fafc', socks: '#f8fafc', gk: '#eab308', style: 'sleeves' } },
+  { code: 'JUV', name: 'Juventus',          league: 'Serie A',         kit: { shirt: '#f8fafc', accent: '#111827', shorts: '#111827', socks: '#f8fafc', gk: '#22c55e', style: 'stripes' } },
+  { code: 'INT', name: 'Inter Milan',       league: 'Serie A',         kit: { shirt: '#0068a8', accent: '#111827', shorts: '#111827', socks: '#0068a8', gk: '#e2e8f0', style: 'stripes' } },
+  { code: 'MIL', name: 'AC Milan',          league: 'Serie A',         kit: { shirt: '#dc2626', accent: '#111827', shorts: '#f8fafc', socks: '#111827', gk: '#eab308', style: 'solid' } },
+  { code: 'NAP', name: 'Naples',            league: 'Serie A',         kit: { shirt: '#12a0d7', accent: '#12a0d7', shorts: '#f8fafc', socks: '#12a0d7', gk: '#ef4444', style: 'solid' } },
+  { code: 'BAY', name: 'Bayern Munich',     league: 'Bundesliga',      kit: { shirt: '#dc052d', accent: '#a10019', shorts: '#dc052d', socks: '#dc052d', gk: '#22d3ee', style: 'solid' } },
+  { code: 'DOR', name: 'Borussia Dortmund', league: 'Bundesliga',      kit: { shirt: '#fde100', accent: '#111827', shorts: '#111827', socks: '#fde100', gk: '#7c3aed', style: 'solid' } },
+  { code: 'LEV', name: 'Bayer Leverkusen',  league: 'Bundesliga',      kit: { shirt: '#e32219', accent: '#111827', shorts: '#111827', socks: '#e32219', gk: '#38bdf8', style: 'solid' } },
+  { code: 'PSG', name: 'Paris SG',          league: 'Ligue 1',         kit: { shirt: '#004170', accent: '#da291c', shorts: '#004170', socks: '#004170', gk: '#e2e8f0', style: 'sleeves' } },
+  { code: 'OM',  name: 'Olympique de Marseille', league: 'Ligue 1',    kit: { shirt: '#f8fafc', accent: '#2faee0', shorts: '#f8fafc', socks: '#f8fafc', gk: '#111827', style: 'sleeves' } },
+  { code: 'OL',  name: 'Olympique Lyonnais', league: 'Ligue 1',        kit: { shirt: '#f8fafc', accent: '#1d4ed8', shorts: '#f8fafc', socks: '#dc2626', gk: '#a3e635', style: 'sleeves' } },
+  { code: 'MON', name: 'AS Monaco',         league: 'Ligue 1',         kit: { shirt: '#e63946', accent: '#f8fafc', shorts: '#f8fafc', socks: '#e63946', gk: '#22c55e', style: 'halves' } },
+  { code: 'LIL', name: 'Lille OSC',         league: 'Ligue 1',         kit: { shirt: '#e01e13', accent: '#12233f', shorts: '#12233f', socks: '#e01e13', gk: '#eab308', style: 'solid' } },
+  { code: 'ROM', name: 'AS Rome',           league: 'Serie A',         kit: { shirt: '#8e1f2f', accent: '#f0bc42', shorts: '#8e1f2f', socks: '#8e1f2f', gk: '#0ea5e9', style: 'solid' } },
+  { code: 'MUN', name: 'Manchester United', league: 'Premier League',  kit: { shirt: '#da291c', accent: '#111827', shorts: '#f8fafc', socks: '#da291c', gk: '#22c55e', style: 'solid' } },
+  { code: 'RBL', name: 'RB Leipzig',        league: 'Bundesliga',      kit: { shirt: '#f8fafc', accent: '#dd013f', shorts: '#f8fafc', socks: '#dd013f', gk: '#a3e635', style: 'sleeves' } },
+  { code: 'BIL', name: 'Athletic Bilbao',   league: 'Liga',            kit: { shirt: '#ee2523', accent: '#f8fafc', shorts: '#111827', socks: '#ee2523', gk: '#7c3aed', style: 'sleeves' } }
+];
 
-function createPlayerTexture(team, num, isGK) {
+const CLUB_NAME_POOL = ['Moreau', 'Silva', 'Dubois', 'Rossi', 'Fernandez', 'Keller', 'Andersen', 'Okafor', 'Petrov', 'Marchetti', 'Lindgren', 'Costa', 'Yilmaz', 'Verhoeven', 'Gallagher', 'Mercier', 'DiMarco', 'Sanchez', 'Weber', 'Novak', 'Baptiste', 'Eriksen', 'Fontaine', 'Kovac', 'Lambrti', 'Ricci', 'Sorlund', 'Traore', 'Vidal', 'Wagner', 'Berger', 'Colombo', 'Fischer', 'Haddad', 'Ivanov', 'Janssen', 'Keita', 'Lombardi', 'Nilsson', 'Ortega', 'Pereira', 'Quinn', 'Reyes', 'Steiner'];
+
+const FORMATION = [
+  { x: 0, z: -49, gk: true },
+  { x: -9, z: -34 }, { x: 9, z: -34 },
+  { x: -22, z: -29 }, { x: 22, z: -29 },
+  { x: -6, z: -15 }, { x: 0, z: -23 }, { x: 6, z: -12 },
+  { x: -18, z: -5 }, { x: 18, z: -5 }, { x: 0, z: -3 }
+];
+
+let matchTeams = null;
+
+function pickMatchup() {
+  const pool = CLUBS.slice();
+  const a = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+  const b = pool[Math.floor(Math.random() * pool.length)];
+  return [{ club: a, side: 0 }, { club: b, side: 1 }];
+}
+
+function clubOf(teamIdx) { return matchTeams[teamIdx].club; }
+function clubCode(teamIdx) { return clubOf(teamIdx).code; }
+function clubName(teamIdx) { return clubOf(teamIdx).name; }
+
+function updateScoreboard() {
+  matchTeams.forEach((mt, idx) => {
+    document.getElementById('team-name-' + idx).textContent = mt.club.code;
+    document.getElementById('team-dot-' + idx).style.background = mt.club.kit.shirt;
+  });
+  document.getElementById('match-subtitle').textContent =
+    matchTeams[0].club.name + ' vs ' + matchTeams[1].club.name +
+    ' - ' + matchTeams[0].club.league + ' / ' + matchTeams[1].club.league;
+}
+
+function kitIsDark(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
+}
+
+function drawKit(ctx, kit, w, h, isGK) {
+  const base = isGK ? kit.gk : kit.shirt;
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, w, h);
+  if (!isGK) {
+    if (kit.style === 'halves') {
+      ctx.fillStyle = kit.accent;
+      ctx.fillRect(w / 2, 0, w / 2, h);
+    } else if (kit.style === 'stripes') {
+      ctx.fillStyle = kit.accent;
+      for (let x = 0; x < w; x += 64) ctx.fillRect(x, 0, 30, h);
+    } else if (kit.style === 'sleeves') {
+      ctx.fillStyle = kit.accent;
+      ctx.fillRect(0, 0, 46, h);
+      ctx.fillRect(w - 46, 0, 46, h);
+    } else {
+      ctx.fillStyle = kit.accent;
+      ctx.fillRect(w - 52, 0, 52, h);
+    }
+  } else {
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.fillRect(w - 56, 0, 56, h);
+  }
+}
+
+function createPlayerTexture(club, num, isGK) {
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 256;
   const ctx = c.getContext('2d');
 
-  if (isGK) {
-    ctx.fillStyle = team === 'ARS' ? '#84cc16' : '#f59e0b';
-    ctx.fillRect(0, 0, 256, 256);
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.fillRect(190, 0, 66, 256);
-  } else if (team === 'ARS') {
-    ctx.fillStyle = '#dc2626';
-    ctx.fillRect(0, 0, 256, 256);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(192, 0, 64, 256);
-  } else {
-    ctx.fillStyle = '#1d4ed8';
-    ctx.fillRect(0, 0, 256, 256);
-    ctx.fillStyle = '#93c5fd';
-    ctx.fillRect(0, 118, 256, 20);
-  }
+  drawKit(ctx, club.kit, 256, 256, isGK);
 
-  ctx.fillStyle = isGK ? '#0f172a' : (team === 'ARS' ? '#111827' : '#ffffff');
+  const base = isGK ? club.kit.gk : club.kit.shirt;
+  ctx.fillStyle = kitIsDark(base) ? '#ffffff' : '#111827';
   ctx.font = 'bold 74px Inter, Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -984,7 +1130,7 @@ function createPlayerTexture(team, num, isGK) {
   return new THREE.CanvasTexture(c);
 }
 
-function createNameplateSprite(name, num, team, isGK) {
+function createNameplateSprite(name, num, club, isGK) {
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 64;
@@ -995,7 +1141,7 @@ function createNameplateSprite(name, num, team, isGK) {
   ctx.roundRect(12, 8, 232, 46, 12);
   ctx.fill();
 
-  ctx.strokeStyle = isGK ? '#a3e635' : (team === 'ARS' ? '#f87171' : '#60a5fa');
+  ctx.strokeStyle = isGK ? '#a3e635' : club.kit.shirt;
   ctx.lineWidth = 3;
   ctx.stroke();
 
@@ -1012,75 +1158,82 @@ function createNameplateSprite(name, num, team, isGK) {
   return sprite;
 }
 
-function buildHumanRig(shirtMat, shortsMat, sockMat, skinColor = 0xd69e76, hairColor = 0x1f1916) {
+function buildHumanRig(shirtMat, shortsMat, sockMat, skinColor = 0xd69e76, hairColor = 0x1f1916, scale = 1) {
   const group = new THREE.Group();
 
   const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.65 });
   const hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.8 });
   const bootMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.4 });
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.72, 0.3), shirtMat);
-  torso.position.y = 1.14;
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.215, 0.68, 12), shirtMat);
+  torso.position.y = 1.13;
   torso.castShadow = true;
   group.add(torso);
 
-  const shorts = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.24, 0.31), shortsMat);
-  shorts.position.y = 0.72;
+  const shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.155, 12, 12), shirtMat);
+  shoulderL.position.set(-0.26, 1.42, 0);
+  group.add(shoulderL);
+  const shoulderR = new THREE.Mesh(new THREE.SphereGeometry(0.155, 12, 12), shirtMat);
+  shoulderR.position.set(0.26, 1.42, 0);
+  group.add(shoulderR);
+
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.085, 0.14, 8), skinMat);
+  neck.position.y = 1.56;
+  group.add(neck);
+
+  const shorts = new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.205, 0.26, 12), shortsMat);
+  shorts.position.y = 0.77;
   shorts.castShadow = true;
   group.add(shorts);
 
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.185, 16, 16), skinMat);
-  head.position.y = 1.71;
+  head.position.y = 1.76;
   head.castShadow = true;
   group.add(head);
 
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.192, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.58), hairMat);
-  hair.position.set(0, 1.73, -0.01);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.19, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
+  hair.position.set(0, 1.785, -0.012);
   group.add(hair);
 
-  const leftLeg = new THREE.Group();
-  leftLeg.position.set(-0.14, 0.62, 0);
-  const lThigh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.34, 0.18), shortsMat);
-  lThigh.position.y = -0.14;
-  const lSock = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.28, 0.17), sockMat);
-  lSock.position.y = -0.42;
-  const lBoot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.11, 0.27), bootMat);
-  lBoot.position.set(0, -0.57, 0.04);
-  leftLeg.add(lThigh, lSock, lBoot);
-  group.add(leftLeg);
+  function buildLeg(side) {
+    const leg = new THREE.Group();
+    leg.position.set(0.135 * side, 0.6, 0);
+    const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.07, 0.34, 10), shortsMat);
+    thigh.position.y = -0.16;
+    const calf = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.05, 0.34, 10), sockMat);
+    calf.position.y = -0.49;
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.11, 0.29), bootMat);
+    boot.position.set(0, -0.585, 0.045);
+    leg.add(thigh, calf, boot);
+    return leg;
+  }
+  const leftLeg = buildLeg(-1);
+  const rightLeg = buildLeg(1);
+  group.add(leftLeg, rightLeg);
 
-  const rightLeg = new THREE.Group();
-  rightLeg.position.set(0.14, 0.62, 0);
-  const rThigh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.34, 0.18), shortsMat);
-  rThigh.position.y = -0.14;
-  const rSock = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.28, 0.17), sockMat);
-  rSock.position.y = -0.42;
-  const rBoot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.11, 0.27), bootMat);
-  rBoot.position.set(0, -0.57, 0.04);
-  rightLeg.add(rThigh, rSock, rBoot);
-  group.add(rightLeg);
-
-  const leftArmPivot = new THREE.Group();
-  leftArmPivot.position.set(-0.36, 1.44, 0);
-  const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.52, 0.14), skinMat);
-  lArm.position.y = -0.22;
-  leftArmPivot.add(lArm);
-  group.add(leftArmPivot);
-
-  const rightArmPivot = new THREE.Group();
-  rightArmPivot.position.set(0.36, 1.44, 0);
-  const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.52, 0.14), skinMat);
-  rArm.position.y = -0.22;
-  rightArmPivot.add(rArm);
-  group.add(rightArmPivot);
+  function buildArm(side) {
+    const arm = new THREE.Group();
+    arm.position.set(0.3 * side, 1.42, 0);
+    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.26, 8), shirtMat);
+    upper.position.y = -0.13;
+    const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.04, 0.3, 8), skinMat);
+    forearm.position.y = -0.42;
+    arm.add(upper, forearm);
+    return arm;
+  }
+  const leftArmPivot = buildArm(-1);
+  const rightArmPivot = buildArm(1);
+  group.add(leftArmPivot, rightArmPivot);
 
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.45, 0.62, 28),
     new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide, transparent: true, opacity: 0 })
   );
-  ring.rotation.x = -Math.PI / 2;
+  ring.rotation.x = -Math.PI / 2
   ring.position.y = 0.03;
   group.add(ring);
+
+  group.scale.set(scale, scale, scale);
 
   return { group, torso, head, leftLeg, rightLeg, leftArmPivot, rightArmPivot, ring };
 }
@@ -1090,69 +1243,92 @@ const selectableMeshes = [];
 const skinTones = [0xf1c27d, 0xd69e76, 0x8d5524, 0xc68642, 0x5c3818];
 const hairTones = [0x1c1917, 0x451a03, 0x78350f, 0x09090b, 0x92400e];
 
-function initPlayers() {
-  const all = [
-    ...TEAM_ROSTER.ARS.map(p => ({ ...p, team: 'ARS' })),
-    ...TEAM_ROSTER.CHE.map(p => ({ ...p, team: 'CHE' }))
-  ];
+function clearPlayers() {
+  players.forEach(p => {
+    scene.remove(p.rig.group);
+    scene.remove(p.nameplate);
+  });
+  players.length = 0;
+  selectableMeshes.length = 0;
+}
 
-  all.forEach((info, i) => {
-    const shirtMat = new THREE.MeshStandardMaterial({
-      map: createPlayerTexture(info.team, info.num, info.gk),
-      roughness: 0.55
+function buildMatchPlayers() {
+  clearPlayers();
+  const namePool = CLUB_NAME_POOL.slice();
+  for (let i = namePool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [namePool[i], namePool[j]] = [namePool[j], namePool[i]];
+  }
+
+  matchTeams.forEach((mt, teamIdx) => {
+    FORMATION.forEach((slot, i) => {
+      const num = i + 1;
+      const shirtMat = new THREE.MeshStandardMaterial({
+        map: createPlayerTexture(mt.club, num, slot.gk),
+        roughness: 0.55
+      });
+      const shortsMat = new THREE.MeshStandardMaterial({
+        color: slot.gk ? 0x1e293b : mt.club.kit.shorts,
+        roughness: 0.65
+      });
+      const sockMat = new THREE.MeshStandardMaterial({
+        color: slot.gk ? 0xa3e635 : mt.club.kit.socks,
+        roughness: 0.7
+      });
+
+      const scale = 0.95 + Math.random() * 0.12;
+      const rig = buildHumanRig(
+        shirtMat, shortsMat, sockMat,
+        skinTones[players.length % skinTones.length],
+        hairTones[(players.length * 3) % hairTones.length],
+        scale
+      );
+
+      const dirZ = teamIdx === 0 ? 1 : -1;
+      const px = slot.x, pz = dirZ === 1 ? slot.z : -slot.z;
+      rig.group.position.set(px, 0, pz);
+      scene.add(rig.group);
+
+      const name = namePool[players.length];
+      const nameplate = createNameplateSprite(name, num, mt.club, slot.gk);
+      nameplate.position.set(px, 2.26, pz);
+      scene.add(nameplate);
+
+      const playerObj = {
+        id: players.length,
+        team: teamIdx,
+        name,
+        fullName: name + ' (#' + num + ')',
+        num,
+        isGK: slot.gk,
+        homePos: new THREE.Vector3(px, 0, pz),
+        pos: rig.group.position,
+        rig,
+        nameplate,
+        fallen: false,
+        fallTimer: 0,
+        slidingTackle: 0,
+        slideDir: new THREE.Vector3(),
+        handballRaise: 0,
+        pushAnim: 0,
+        gkDive: 0,
+        gkDiveDir: 1,
+        yellowCards: 0,
+        redCard: false,
+        walkingOff: false,
+        phase: Math.random() * Math.PI * 2
+      };
+
+      rig.torso.userData.player = playerObj;
+      selectableMeshes.push(rig.torso);
+      players.push(playerObj);
     });
-    const shortsMat = new THREE.MeshStandardMaterial({
-      color: info.gk ? 0x1e293b : (info.team === 'ARS' ? 0xffffff : 0x1e3a8a),
-      roughness: 0.65
-    });
-    const sockMat = new THREE.MeshStandardMaterial({
-      color: info.gk ? 0x84cc16 : (info.team === 'ARS' ? 0xdc2626 : 0x2563eb),
-      roughness: 0.7
-    });
-
-    const rig = buildHumanRig(
-      shirtMat, shortsMat, sockMat,
-      skinTones[i % skinTones.length],
-      hairTones[(i * 3) % hairTones.length]
-    );
-    rig.group.position.set(info.x, 0, info.z);
-    scene.add(rig.group);
-
-    const nameplate = createNameplateSprite(info.name, info.num, info.team, info.gk);
-    nameplate.position.set(info.x, 2.22, info.z);
-    scene.add(nameplate);
-
-    const playerObj = {
-      id: i,
-      team: info.team,
-      name: info.name,
-      fullName: `${info.name} (#${info.num})`,
-      num: info.num,
-      isGK: info.gk,
-      homePos: new THREE.Vector3(info.x, 0, info.z),
-      pos: rig.group.position,
-      rig,
-      nameplate,
-      fallen: false,
-      fallTimer: 0,
-      slidingTackle: 0,
-      slideDir: new THREE.Vector3(),
-      handballRaise: 0,
-      pushAnim: 0,
-      gkDive: 0,
-      gkDiveDir: 1,
-      yellowCards: 0,
-      redCard: false,
-      walkingOff: false,
-      phase: Math.random() * Math.PI * 2
-    };
-
-    rig.torso.userData.player = playerObj;
-    selectableMeshes.push(rig.torso);
-    players.push(playerObj);
   });
 }
-initPlayers();
+
+matchTeams = pickMatchup();
+updateScoreboard();
+buildMatchPlayers();
 
 const linesmen = [];
 function buildLinesmen() {
@@ -1232,7 +1408,7 @@ const ball = {
   pos: new THREE.Vector3(0, 0.22, 0),
   vel: new THREE.Vector3(0, 0, 0),
   owner: players[9],
-  lastTouchTeam: 'ARS',
+  lastTouchTeam: 0,
   freeFlight: false
 };
 ball.mesh.castShadow = true;
@@ -1430,17 +1606,17 @@ function expelPlayer(player) {
   player.rig.ring.material.opacity = 0;
   player.nameplate.visible = false;
 
-  const teamIdx = player.team === 'ARS' ? 0 : 1;
+  const teamIdx = player.team;
   state.redCards[teamIdx]++;
   state.addedTime = Math.min(6, state.addedTime + 0.4);
-  const badge = document.getElementById(teamIdx === 0 ? 'red-ars' : 'red-che');
+  const badge = document.getElementById('red-' + teamIdx);
   badge.textContent = `🟥${state.redCards[teamIdx]}`;
   badge.style.display = 'inline-block';
 
   if (ball.owner === player) ball.owner = null;
   if (state.selectedPlayer === player) state.selectedPlayer = null;
 
-  addLog(`🟥 EXCLUSION ! ${player.team} · ${player.fullName} quitte le terrain.`, 'log-bad');
+  addLog(`🟥 EXCLUSION ! ${clubCode(player.team)} · ${player.fullName} quitte le terrain.`, 'log-bad');
   audio.crowdRoar(0.88);
 }
 
@@ -1475,7 +1651,7 @@ function issueCardToPlayer(player, cardType) {
       true
     );
   } else {
-    addLog(`🟨 Carton jaune adressé à ${target.team} · ${target.fullName}.`, 'log-warn');
+    addLog(`🟨 Carton jaune adressé à ${clubCode(target.team)} · ${target.fullName}.`, 'log-warn');
     showCardToast(`🟨 CARTON JAUNE pour ${target.fullName}`, false);
   }
 }
@@ -1501,123 +1677,289 @@ function recordReplayFrame() {
 }
 
 // --- 8. GÉNÉRATEUR D'ACTIONS CONCRÈTES EN 3D (SANS AUCUN TEXTE SPOILER) ---
-const INCIDENT_TEMPLATES = [
-  { type: 'slide_tackle_foul', expected: ['foul', 'yellow'], linesmanIdx: -1, flagMode: 'down', inBox: false, kind: 'slide_foul' },
-  { type: 'clean_tackle_ball', expected: ['play', 'resume'], linesmanIdx: -1, flagMode: 'down', inBox: false, kind: 'clean_tackle' },
-  { type: 'handball_box', expected: ['penalty', 'handball', 'var'], linesmanIdx: -1, flagMode: 'down', inBox: true, kind: 'handball' },
-  { type: 'handball_mid', expected: ['handball', 'foul', 'yellow'], linesmanIdx: -1, flagMode: 'down', inBox: false, kind: 'handball' },
-  { type: 'penalty_slide_foul', expected: ['penalty', 'var', 'yellow'], linesmanIdx: -1, flagMode: 'down', inBox: true, kind: 'slide_foul' },
-  { type: 'push_in_back', expected: ['foul', 'yellow'], linesmanIdx: -1, flagMode: 'down', inBox: false, kind: 'push' },
-  { type: 'red_card_tackle', expected: ['red', 'yellow'], linesmanIdx: -1, flagMode: 'down', inBox: false, kind: 'reckless_slide' },
-  { type: 'offside', expected: ['offside', 'foul'], linesmanIdx: 0, flagMode: 'offside', inBox: false, kind: 'offside' },
-  { type: 'throw_in', expected: ['restart'], linesmanIdx: 1, flagMode: 'throw', inBox: false, kind: 'out_of_bounds' }
-];
+const INCIDENT_KINDS = {
+  slide_foul:     { expected: ['foul', 'yellow'],             inBox: false, weight: 3, baseAnimTime: 3.2 },
+  clean_tackle:   { expected: ['play', 'resume'],             inBox: false, weight: 3, baseAnimTime: 3.2 },
+  handball:       { expected: ['penalty', 'handball', 'var'], inBox: true,  weight: 2, baseAnimTime: 4.2 },
+  handball_mid:   { expected: ['handball', 'foul', 'yellow'], inBox: false, weight: 2, baseAnimTime: 4.2 },
+  penalty_slide:  { expected: ['penalty', 'var', 'yellow'],   inBox: true,  weight: 2, baseAnimTime: 3.2 },
+  push:           { expected: ['foul', 'yellow'],             inBox: false, weight: 2, baseAnimTime: 3.2 },
+  reckless_slide: { expected: ['red', 'yellow'],              inBox: false, weight: 1, baseAnimTime: 3.2 },
+  offside:        { expected: ['offside', 'foul'],            inBox: false, weight: 2, baseAnimTime: 3.4 }
+};
 
-function triggerRandomIncident() {
-  if (state.activeIncident || state.whistled || state.varActive || state.setPiece) return;
+function pickIncidentKind(inBox, hasCarrier) {
+  const bag = [];
+  Object.keys(INCIDENT_KINDS).forEach(key => {
+    const k = INCIDENT_KINDS[key];
+    if (k.inBox && !(inBox && (key === 'handball' || key === 'penalty_slide'))) return;
+    if (key === 'handball' && !inBox) return;
+    if (key === 'handball' && !hasCarrier) return;
+    if (key === 'handball_mid' && !hasCarrier) return;
+    if (key === 'penalty_slide' && !inBox) return;
+    if (key === 'offside' && !hasCarrier) return;
+    for (let w = 0; w < k.weight; w++) bag.push(key);
+  });
+  if (!bag.length) return 'slide_foul';
+  return bag[Math.floor(Math.random() * bag.length)];
+}
 
-  const tpl = INCIDENT_TEMPLATES[Math.floor(Math.random() * INCIDENT_TEMPLATES.length)];
-  const outfieldPlayers = players.filter(p => !p.isGK && !p.redCard);
+function nearestOutfieldTo(pos, excludeTeamIdx, requireTeam) {
+  let best = null;
+  let bestD = Infinity;
+  players.forEach(p => {
+    if (p.isGK || p.redCard) return;
+    if (requireTeam !== undefined && requireTeam !== null && p.team !== requireTeam) return;
+    if (p.team === excludeTeamIdx) return;
+    const d = p.pos.distanceTo(pos);
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  });
+  return best;
+}
 
-  const victim = (ball.owner && !ball.owner.isGK && !ball.owner.redCard)
-    ? ball.owner
-    : outfieldPlayers[Math.floor(Math.random() * outfieldPlayers.length)];
+function showVisionHUD(dist) {
+  const vision = dist < 14 ? 'Clair' : dist < 26 ? 'Moyen' : 'Compliqu\u00e9';
+  const visionHud = document.getElementById('vision-hud');
+  document.getElementById('vision-label').textContent = vision;
+  document.getElementById('vision-dist').textContent = `(${dist.toFixed(0)}m de l'action)`;
+  visionHud.classList.remove('hidden', 'vision-good', 'vision-mid', 'vision-bad');
+  visionHud.classList.add(vision === 'Clair' ? 'vision-good' : vision === 'Moyen' ? 'vision-mid' : 'vision-bad');
+  return vision;
+}
 
-  const defenders = outfieldPlayers.filter(p => p.team !== victim.team);
-  const offender = defenders[Math.floor(Math.random() * defenders.length)];
-
-  if (tpl.inBox) {
-    const boxZ = offender.team === 'ARS' ? -43.5 : 43.5;
-    const actionX = (Math.random() - 0.5) * 16;
-    victim.pos.set(actionX, 0, boxZ);
-    offender.pos.set(actionX + 1.8, 0, boxZ + (offender.team === 'ARS' ? 1.5 : -1.5));
-  } else if (tpl.kind === 'out_of_bounds') {
-    const sideX = (PITCH_W / 2) - 0.4;
-    victim.pos.set(sideX, 0, ball.pos.z);
-    offender.pos.set(sideX - 1.2, 0, ball.pos.z);
-  } else {
-    victim.pos.set(
-      Math.max(-26, Math.min(26, ball.pos.x)),
-      0,
-      Math.max(-36, Math.min(36, ball.pos.z))
-    );
-    offender.pos.set(victim.pos.x + 2.1, 0, victim.pos.z + 1.4);
-  }
-
-  ball.pos.set(victim.pos.x, 0.22, victim.pos.z);
-  ball.lastTouchTeam = offender.team;
-  ball.owner = null;
-  ball.freeFlight = true;
-
-  const dirToVictim = victim.pos.clone().sub(offender.pos).setY(0).normalize();
-  offender.rig.group.rotation.y = Math.atan2(dirToVictim.x, dirToVictim.z);
-
-  if (tpl.kind === 'slide_foul' || tpl.kind === 'reckless_slide') {
-    offender.slidingTackle = 1.6;
-    offender.slideDir.copy(dirToVictim);
-    spawnTurfSplash(victim.pos);
-    audio.kickSound(0.24);
-
-    victim.fallen = true;
-    victim.fallTimer = 5.5;
-    victim.rig.group.rotation.y = Math.atan2(-dirToVictim.z, dirToVictim.x);
-    ball.vel.set(dirToVictim.z * 4.5, 1.2, -dirToVictim.x * 4.5);
-  } else if (tpl.kind === 'clean_tackle') {
-    offender.slidingTackle = 1.4;
-    offender.slideDir.copy(dirToVictim);
-    spawnTurfSplash(ball.pos);
-    audio.kickSound(0.32);
-
-    ball.vel.copy(dirToVictim.multiplyScalar(11.5));
-    ball.vel.y = 2.0;
-    victim.fallen = true;
-    victim.fallTimer = 3.2;
-  } else if (tpl.kind === 'handball') {
-    offender.handballRaise = 3.5;
-    victim.rig.group.rotation.y = Math.atan2(offender.pos.x - victim.pos.x, offender.pos.z - victim.pos.z);
-    ball.pos.set(offender.pos.x + 0.38, 1.48, offender.pos.z);
-    ball.vel.set((Math.random() - 0.5) * 4.2, 2.8, (Math.random() - 0.5) * 4.2);
-    audio.kickSound(0.2);
-  } else if (tpl.kind === 'push') {
-    offender.pos.copy(victim.pos).addScaledVector(dirToVictim, -0.75);
-    offender.pushAnim = 2.2;
-    victim.fallen = true;
-    victim.fallTimer = 4.5;
-    ball.vel.set(dirToVictim.x * 3.8, 0.4, dirToVictim.z * 3.8);
-  } else if (tpl.kind === 'offside') {
-    const goalDir = victim.team === 'ARS' ? 1 : -1;
-    victim.pos.z = goalDir * 39;
-    ball.vel.set(0, 1.4, goalDir * 9.5);
-    audio.kickSound(0.22);
-  } else if (tpl.kind === 'out_of_bounds') {
-    ball.pos.set(PITCH_W / 2 + 0.85, 0.22, victim.pos.z);
-    ball.vel.set(1.2, 0.5, 0.4);
-  }
-
+function buildActiveIncident(kind, victim, offender) {
+  const def = INCIDENT_KINDS[kind] || INCIDENT_KINDS.slide_foul;
   const refDist = referee.pos.distanceTo(victim.pos);
-  const vision = refDist < 14 ? 'Clair' : refDist < 26 ? 'Moyen' : 'Compliqué';
   state.visionTotal += refDist;
   state.visionCount++;
-
+  const vision = showVisionHUD(refDist);
   state.activeIncident = {
-    ...tpl,
+    type: kind,
+    kind: kind === 'penalty_slide' ? 'slide_foul' : kind === 'handball_mid' ? 'handball' : kind,
+    baseKind: kind,
+    expected: def.expected,
+    inBox: def.inBox,
     offender,
     victim,
     visionDist: refDist,
     vision,
     expiresIn: 11
   };
+}
 
-  const visionHud = document.getElementById('vision-hud');
-  const visionLabel = document.getElementById('vision-label');
-  const visionDistEl = document.getElementById('vision-dist');
-  visionLabel.textContent = vision;
-  visionDistEl.textContent = `(${refDist.toFixed(0)}m de l'action)`;
-  visionHud.classList.remove('hidden', 'vision-good', 'vision-mid', 'vision-bad');
-  visionHud.classList.add(vision === 'Clair' ? 'vision-good' : vision === 'Moyen' ? 'vision-mid' : 'vision-bad');
+function looseBallKick(dir, power, up) {
+  const d = dir.clone().setY(0).normalize();
+  ball.vel.set(d.x * power, up, d.z * power);
+  ball.owner = null;
+  ball.freeFlight = true;
+}
 
-  if (tpl.linesmanIdx >= 0) {
-    linesmen[tpl.linesmanIdx].flagState = tpl.flagMode;
+function triggerRandomIncident() {
+  if (state.activeIncident || state.scenario || state.whistled || state.varActive || state.setPiece) return;
+
+  const carrier = (ball.owner && !ball.owner.isGK && !ball.owner.redCard) ? ball.owner : null;
+  const subject = carrier || players.filter(p => !p.isGK && !p.redCard)[0];
+  if (!subject) {
+    state.incidentTimer = 6;
+    return;
+  }
+  const offenders = players.filter(p => !p.isGK && !p.redCard && p.team !== subject.team);
+  const offender = offenders[Math.floor(Math.random() * offenders.length)];
+  if (!offender) {
+    state.incidentTimer = 6;
+    return;
+  }
+
+  const victim = carrier || nearestOutfieldTo(ball.pos, offender.team, null) || subject;
+  const inBox = Math.abs(victim.pos.z) > 34.5 && Math.abs(victim.pos.x) < 20.2;
+  const kind = pickIncidentKind(inBox, !!carrier);
+
+  state.scenario = {
+    kind,
+    victim,
+    offender,
+    carrier,
+    phase: kind === 'offside' ? 'run' : kind === 'handball' ? 'lead' : 'approach',
+    timer: INCIDENT_KINDS[kind].baseAnimTime,
+    animPhase: Math.random() * 6,
+    lineZ: null,
+    passed: false
+  };
+}
+
+function cancelScenario() {
+  state.scenario = null;
+  state.incidentTimer = 6 + Math.random() * 4;
+}
+
+function resolveScenarioContact(sc) {
+  const victim = sc.victim;
+  const offender = sc.offender;
+  const toV = victim.pos.clone().sub(offender.pos).setY(0).normalize();
+
+  if (sc.kind === 'slide_foul' || sc.kind === 'reckless_slide' || sc.kind === 'penalty_slide' || sc.kind === 'clean_tackle') {
+    offender.slidingTackle = sc.kind === 'clean_tackle' ? 1.4 : 1.6;
+    offender.slideDir.copy(toV);
+    spawnTurfSplash(victim.pos);
+    audio.kickSound(0.24);
+
+    if (sc.kind === 'clean_tackle') {
+      ball.lastTouchTeam = offender.team;
+      looseBallKick(new THREE.Vector3(toV.x, 0, toV.z), 11.5, 2.0);
+      victim.fallen = true;
+      victim.fallTimer = 3.2;
+    } else {
+      ball.lastTouchTeam = victim.team;
+      looseBallKick(new THREE.Vector3(toV.z, 0, -toV.x), 4.5, 1.2);
+      victim.fallen = true;
+      victim.fallTimer = 5.5;
+      victim.rig.group.rotation.y = Math.atan2(-toV.z, toV.x);
+    }
+  } else if (sc.kind === 'handball' || sc.kind === 'handball_mid') {
+    offender.handballRaise = 3.5;
+    ball.lastTouchTeam = offender.team;
+    ball.owner = null;
+    ball.freeFlight = true;
+    ball.pos.set(offender.pos.x + toV.x * 0.38, 1.48, offender.pos.z + toV.z * 0.38);
+    ball.vel.set((Math.random() - 0.5) * 4.2, 2.8, (Math.random() - 0.5) * 4.2);
+    audio.kickSound(0.2);
+    victim.rig.group.rotation.y = Math.atan2(offender.pos.x - victim.pos.x, offender.pos.z - victim.pos.z);
+  } else if (sc.kind === 'push') {
+    offender.pos.copy(victim.pos).addScaledVector(toV, -0.75);
+    offender.pushAnim = 2.2;
+    victim.fallen = true;
+    victim.fallTimer = 4.5;
+    ball.lastTouchTeam = victim.team;
+    looseBallKick(toV, 3.8, 0.4);
+  } else {
+    return;
+  }
+
+  buildActiveIncident(sc.kind, victim, offender);
+  state.scenario = null;
+}
+
+function driveScenario(dt) {
+  const sc = state.scenario;
+  if (!sc) return;
+
+  if (state.whistled || state.varActive || state.setPiece) {
+    cancelScenario();
+    return;
+  }
+
+  sc.timer -= dt;
+  sc.animPhase += dt * 8.5;
+
+  const victim = sc.victim;
+  const offender = sc.offender;
+  const carrier = sc.carrier;
+  const attackDir = victim.team === 0 ? 1 : -1;
+
+  const runAnim = p => {
+    const s = Math.sin(sc.animPhase) * 0.6;
+    p.rig.leftLeg.rotation.x = s;
+    p.rig.rightLeg.rotation.x = -s;
+    p.rig.leftArmPivot.rotation.x = -s * 0.6;
+    p.rig.rightArmPivot.rotation.x = s * 0.6;
+  };
+
+  const moveTowards = (p, target, speed) => {
+    const to = target.clone().sub(p.pos).setY(0);
+    const dist = to.length();
+    if (dist > 0.25 && speed > 0) {
+      const dir = to.normalize();
+      p.pos.addScaledVector(dir, Math.min(speed * dt, dist));
+      p.rig.group.rotation.y = Math.atan2(dir.x, dir.z);
+    }
+    return dist;
+  };
+
+  if (sc.kind === 'offside') {
+    if (ball.owner !== carrier) {
+      cancelScenario();
+      return;
+    }
+    if (sc.phase === 'run') {
+      let lineZ = attackDir === 1 ? -PITCH_L / 2 : PITCH_L / 2;
+      players.forEach(d => {
+        if (d.isGK || d.redCard || d.team === victim.team) return;
+        if (attackDir === 1 && d.pos.z > lineZ) lineZ = d.pos.z;
+        if (attackDir === -1 && d.pos.z < lineZ) lineZ = d.pos.z;
+      });
+      sc.lineZ = lineZ;
+      const leadZ = attackDir === 1 ? Math.min(46, lineZ + 2.6) : Math.max(-46, lineZ - 2.6);
+      moveTowards(victim, new THREE.Vector3(victim.pos.x * 0.25, 0, leadZ), 6.4);
+      runAnim(victim);
+      moveTowards(offender, victim.pos, 4.6);
+      runAnim(offender);
+
+      const beyondLine = attackDir === 1 ? victim.pos.z > lineZ + 0.4 : victim.pos.z < lineZ - 0.4;
+      if (beyondLine) {
+        const lm = linesmen[victim.pos.x < 0 ? 0 : 1];
+        lm.flagState = 'offside';
+      }
+
+      if (sc.timer <= 0) {
+        if (beyondLine) {
+          ball.owner = null;
+          ball.freeFlight = true;
+          const leadPoint = new THREE.Vector3(Math.max(-30, Math.min(30, victim.pos.x * 0.6)), 0.6, victim.pos.z + attackDir * 1.5);
+          const passDir = leadPoint.clone().sub(ball.pos).normalize();
+          const power = THREE.MathUtils.clamp(ball.pos.distanceTo(leadPoint) * 0.85, 7, 15);
+          ball.vel.set(passDir.x * power, 1.1, passDir.z * power);
+          ball.lastTouchTeam = carrier.team;
+          audio.kickSound(0.22);
+          buildActiveIncident('offside', victim, victim);
+          cancelScenario();
+        } else {
+          cancelScenario();
+        }
+        return;
+      }
+    }
+    return;
+  }
+
+  if (sc.phase === 'approach' || sc.phase === 'push') {
+    const contactDist = sc.phase === 'push' ? 1.0 : 1.05;
+    if (ball.owner === victim) {
+      victim.pos.z = THREE.MathUtils.clamp(victim.pos.z + attackDir * 2.4 * dt, -46, 46);
+      victim.rig.group.rotation.y = attackDir === 1 ? 0 : Math.PI;
+      runAnim(victim);
+    }
+    const dist = moveTowards(offender, victim.pos, sc.phase === 'push' ? 5.0 : 5.4);
+    runAnim(offender);
+    if (dist <= contactDist || sc.timer <= 0.3) {
+      resolveScenarioContact(sc);
+    }
+    return;
+  }
+
+  if (sc.phase === 'lead') {
+    if (!sc.passed) {
+      ball.owner = null;
+      ball.freeFlight = true;
+      const chest = offender.pos.clone().setY(1.35);
+      const dir = chest.clone().sub(ball.pos).normalize();
+      const power = 7 + Math.random() * 8;
+      ball.vel.set(dir.x * power, Math.max(1.2, dir.y * power * 0.25), dir.z * power);
+      ball.lastTouchTeam = victim.team;
+      audio.kickSound(0.2);
+      sc.passed = true;
+    } else {
+      const dx = ball.pos.x - offender.pos.x;
+      const dz = ball.pos.z - offender.pos.z;
+      if (Math.sqrt(dx * dx + dz * dz) < 0.9 && ball.pos.y < 2.05 && ball.pos.y > 0.25) {
+        resolveScenarioContact(sc);
+      } else if (ball.pos.distanceTo(victim.pos) > 30 || sc.timer <= 0) {
+        cancelScenario();
+      }
+    }
+    return;
   }
 }
 
@@ -1645,8 +1987,8 @@ function setupSetPiece(spotPos, setPieceType, benefitingTeam) {
   const finalSpot = spotPos.clone();
   finalSpot.y = 0.22;
 
-  const defendingTeam = benefitingTeam === 'ARS' ? 'CHE' : 'ARS';
-  const attackDirZ = benefitingTeam === 'ARS' ? 1 : -1;
+  const defendingTeam = benefitingTeam === 0 ? 1 : 0;
+  const attackDirZ = benefitingTeam === 0 ? 1 : -1;
   const targetGoalZ = attackDirZ * (PITCH_L / 2);
 
   let resolvedType = setPieceType;
@@ -1770,7 +2112,7 @@ function executeSetPieceShot() {
   const sp = state.setPiece;
   if (!sp) return;
 
-  const dirZ = sp.taker.team === 'ARS' ? 1 : -1;
+  const dirZ = sp.taker.team === 0 ? 1 : -1;
   const targetGoalZ = dirZ * (PITCH_L / 2);
 
   if (sp.type === 'penalty') {
@@ -1830,8 +2172,8 @@ function handleGoalScored(scoringTeamIdx) {
   state.goalNetRipple[netIdx] = 1.5;
 
   audio.crowdRoar(0.98);
-  const teamName = scoringTeamIdx === 0 ? 'ARSENAL' : 'CHELSEA';
-  showBanner(`⚽ BUUUUT POUR ${teamName} !`, `Score : Arsenal ${state.score[0]} - ${state.score[1]} Chelsea`);
+  const teamName = clubName(scoringTeamIdx);
+  showBanner(`⚽ BUUUUT POUR ${teamName.toUpperCase()} !`, `Score : ${clubCode(0)} ${state.score[0]} - ${state.score[1]} ${clubCode(1)}`);
   addLog(`⚽ BUUUUT ! ${teamName} marque (${state.score[0]} - ${state.score[1]})`, 'log-good');
 
   setTimeout(() => {
@@ -1846,33 +2188,33 @@ function handleGoalScored(scoringTeamIdx) {
 
 // --- 9bis. SORTIES DE BALLES AUTOMATIQUES (TOUCHE / CORNER / 6M) ---
 function handleBallOut(mode) {
-  if (state.setPiece || state.goalCooldown > 0 || state.activeIncident) return;
+  if (state.setPiece || state.goalCooldown > 0 || state.activeIncident || state.scenario) return;
 
-  const lastTeam = ball.lastTouchTeam || 'ARS';
+  const lastTeam = typeof ball.lastTouchTeam === 'number' ? ball.lastTouchTeam : 0;
   let spType = 'restart';
   let benefit;
   let spot;
 
   if (mode === 'sideline') {
-    benefit = lastTeam === 'ARS' ? 'CHE' : 'ARS';
+    benefit = 1 - lastTeam;
     spot = new THREE.Vector3(
       Math.sign(ball.pos.x || 1) * PITCH_W / 2,
       0.22,
       THREE.MathUtils.clamp(ball.pos.z, -PITCH_L / 2 + 1, PITCH_L / 2 - 1)
     );
-    addLog(`🙌 Touche pour ${benefit} (dernier contact : ${lastTeam}).`, '');
+    addLog(`\ud83d\ude4c Touche pour ${clubCode(benefit)} (dernier contact : ${clubCode(lastTeam)}).`, '');
   } else {
-    const ownerEnd = ball.pos.z < 0 ? 'ARS' : 'CHE';
+    const ownerEnd = ball.pos.z < 0 ? 0 : 1;
     const attackingLast = lastTeam !== ownerEnd;
-    benefit = attackingLast ? ownerEnd : (ownerEnd === 'ARS' ? 'CHE' : 'ARS');
+    benefit = attackingLast ? ownerEnd : (1 - ownerEnd);
     spType = attackingLast ? 'goalkick' : 'corner';
     const goalZ = ball.pos.z < 0 ? -PITCH_L / 2 : PITCH_L / 2;
     spot = spType === 'corner'
       ? new THREE.Vector3((ball.pos.x >= 0 ? PITCH_W / 2 : -PITCH_W / 2), 0.22, goalZ)
       : new THREE.Vector3(0, 0.22, goalZ + (ball.pos.z < 0 ? 5.5 : -5.5));
     addLog(spType === 'corner'
-      ? `🚩 Corner pour ${benefit} !`
-      : `🥅 Six mètres pour ${benefit}.`);
+      ? `\ud83d\udea9 Corner pour ${clubCode(benefit)} !`
+      : `\ud83e\udd45 Six m\u00e8tres pour ${clubCode(benefit)}.`);
   }
 
   ball.vel.set(0, 0, 0);
@@ -1916,7 +2258,7 @@ function toggleWhistle(forceStop) {
     document.getElementById('act-red').disabled = false;
 
     const targetTxt = state.selectedPlayer
-      ? `${state.selectedPlayer.team} — ${state.selectedPlayer.fullName} ${state.selectedPlayer.yellowCards > 0 ? '(Déjà 1 🟨)' : ''}`
+      ? `${clubCode(state.selectedPlayer.team)} — ${state.selectedPlayer.fullName} ${state.selectedPlayer.yellowCards > 0 ? '(Déjà 1 🟨)' : ''}`
       : 'Aucun joueur visé (visez un joueur avec le réticule central)';
     document.getElementById('selected-player-label').textContent = `🎯 Joueur ciblé : ${targetTxt}`;
     const whistleDist = referee.pos.distanceTo(state.whistleBallPos).toFixed(1);
@@ -1950,8 +2292,8 @@ function resolveDecision(dec) {
 
   const offenderTeam = state.selectedPlayer
     ? state.selectedPlayer.team
-    : (state.activeIncident ? state.activeIncident.offender.team : 'CHE');
-  const benefitingTeam = offenderTeam === 'ARS' ? 'CHE' : 'ARS';
+    : (state.activeIncident ? state.activeIncident.offender.team : 1);
+  const benefitingTeam = 1 - offenderTeam;
 
   if (state.activeIncident) {
     state.totalDecisions++;
@@ -2140,7 +2482,7 @@ function openVAR() {
 
   document.getElementById('var-overlay').classList.remove('hidden');
   const varContext = state.selectedPlayer
-    ? `Contrôle vidéo — Joueur visé : ${state.selectedPlayer.fullName} (${state.selectedPlayer.team})${state.selectedPlayer.yellowCards > 0 ? ' · déjà 1 🟨' : ''}. Jugez le contact, la main ou la position.`
+    ? `Contrôle vidéo — Joueur visé : ${state.selectedPlayer.fullName} (${clubCode(state.selectedPlayer.team)})${state.selectedPlayer.yellowCards > 0 ? ' · déjà 1 🟨' : ''}. Jugez le contact, la main ou la position.`
     : 'Contrôle vidéo en cours — Utilisez les 4 caméras et le ralenti pour juger le contact, la main ou le ballon.';
   document.getElementById('var-incident-text').textContent = varContext;
   addLog('📺 L\'arbitre consulte l\'écran de contrôle VAR.', 'log-warn');
@@ -2168,7 +2510,7 @@ function updateTargetPlayer() {
     if (!target.redCard) {
       target.rig.ring.material.opacity = 0.85;
       crosshair.classList.add('target-active');
-      tooltip.textContent = `${target.team} · ${target.fullName} ${target.yellowCards > 0 ? '🟨' : ''}`;
+      tooltip.textContent = `${clubCode(target.team)} · ${target.fullName} ${target.yellowCards > 0 ? '🟨' : ''}`;
       tooltip.classList.remove('hidden');
       state.selectedPlayer = target;
       return;
@@ -2208,7 +2550,7 @@ function drawMinimap() {
   players.forEach(p => {
     if (p.redCard) return;
     const [mx, my] = toMap(p.pos.x, p.pos.z);
-    mctx.fillStyle = p.isGK ? '#a3e635' : (p.team === 'ARS' ? '#ef4444' : '#3b82f6');
+    mctx.fillStyle = p.isGK ? '#a3e635' : clubOf(p.team).kit.shirt;
     mctx.beginPath();
     mctx.arc(mx, my, 2.7, 0, Math.PI * 2);
     mctx.fill();
@@ -2239,6 +2581,7 @@ function drawMinimap() {
 // --- 13. BOUCLE PRINCIPALE DE SIMULATION ---
 let lastTime = performance.now();
 let passCooldown = 2.4;
+let screenTimer = 0;
 
 function animate(now) {
   requestAnimationFrame(animate);
@@ -2283,7 +2626,7 @@ function animate(now) {
   }
 
   if (state.started && !state.whistled && !state.paused) {
-    state.matchTime += dt * 1.45;
+    state.matchTime += dt * 0.22;
 
     if (!state.halftimeDone && state.matchTime >= 45) {
       state.halftimeDone = true;
@@ -2379,6 +2722,8 @@ function animate(now) {
         }
         if (sp.timer <= 0) executeSetPieceShot();
       }
+    } else if (state.scenario) {
+      driveScenario(dt);
     } else if (!state.activeIncident) {
       state.incidentTimer -= dt;
       if (state.incidentTimer <= 0) triggerRandomIncident();
@@ -2401,14 +2746,14 @@ function animate(now) {
     });
 
     passCooldown -= dt;
-    if (passCooldown <= 0 && !state.activeIncident && !state.setPiece && !ball.freeFlight) {
+    if (passCooldown <= 0 && !state.activeIncident && !state.scenario && !state.setPiece && !ball.freeFlight) {
       passCooldown = 2.6 + Math.random() * 2.0;
       const activeOutfield = players.filter(p => !p.isGK && !p.redCard);
       const passer = ball.owner && !ball.owner.redCard
         ? ball.owner
         : activeOutfield[Math.floor(Math.random() * activeOutfield.length)];
 
-      const dirZ = passer.team === 'ARS' ? 1 : -1;
+      const dirZ = passer.team === 0 ? 1 : -1;
       const goalZ = dirZ * (PITCH_L / 2);
       const distToGoal = Math.abs(goalZ - passer.pos.z);
 
@@ -2483,12 +2828,12 @@ function animate(now) {
           handleGoalScored(0);
           ball.vel.multiplyScalar(0.2);
           ball.freeFlight = false;
-          ball.lastTouchTeam = 'ARS';
+          ball.lastTouchTeam = 0;
         } else if (ball.pos.z < -PITCH_L / 2 - 0.15) {
           handleGoalScored(1);
           ball.vel.multiplyScalar(0.2);
           ball.freeFlight = false;
-          ball.lastTouchTeam = 'CHE';
+          ball.lastTouchTeam = 1;
         }
       }
 
@@ -2501,7 +2846,7 @@ function animate(now) {
         if (p.redCard) return;
         const d = p.pos.distanceTo(new THREE.Vector3(ball.pos.x, 0, ball.pos.z));
         if (p.isGK && d < 1.35 && ball.pos.y < 2.55) {
-          const saveDirZ = p.team === 'ARS' ? 1 : -1;
+          const saveDirZ = p.team === 0 ? 1 : -1;
           ball.vel.set((Math.random() - 0.5) * 8, 3.2, saveDirZ * 8.5);
           ball.lastTouchTeam = p.team;
           audio.kickSound(0.25);
@@ -2523,7 +2868,7 @@ function animate(now) {
         Math.cos(ball.owner.rig.group.rotation.y)
       );
       ball.pos.copy(ball.owner.pos).addScaledVector(fwd, 0.55);
-      ball.pos.y = 0.22;
+      ball.pos.y = 0.22 + Math.abs(Math.sin(now * 0.021)) * 0.16;
     }
 
     ball.mesh.position.copy(ball.pos);
@@ -2588,7 +2933,7 @@ function animate(now) {
 
       if (state.setPiece) {
         if (p.isGK) {
-          const defTeam = state.setPiece.benefitingTeam === 'ARS' ? 'CHE' : 'ARS';
+          const defTeam = state.setPiece.benefitingTeam === 0 ? 1 : 0;
           if (p.team === defTeam && state.setPiece.type === 'penalty') {
             p.pos.x = Math.sin(now * 0.008) * 1.4;
           }
@@ -2596,12 +2941,14 @@ function animate(now) {
         return;
       }
 
+      if (state.scenario && (state.scenario.victim === p || state.scenario.offender === p || state.scenario.carrier === p)) return;
+
       if (p.isGK) {
-        const goalZ = p.team === 'ARS' ? -51.0 : 51.0;
+        const goalZ = p.team === 0 ? -51.0 : 51.0;
         const targetX = Math.max(-3.3, Math.min(3.3, ball.pos.x * 0.45));
         p.pos.x = THREE.MathUtils.lerp(p.pos.x, targetX, dt * 3.5);
         p.pos.z = goalZ;
-        p.rig.group.rotation.y = p.team === 'ARS' ? 0 : Math.PI;
+        p.rig.group.rotation.y = p.team === 0 ? 0 : Math.PI;
 
         if (p.gkDive > 0) {
           p.gkDive -= dt;
@@ -2617,9 +2964,9 @@ function animate(now) {
       const isBallCarrier = ball.owner === p;
       const targetPos = isBallCarrier
         ? new THREE.Vector3(
-            Math.max(-30, Math.min(30, ball.pos.x + (p.team === 'ARS' ? 4 : -4))),
+            Math.max(-30, Math.min(30, ball.pos.x + (p.team === 0 ? 4 : -4))),
             0,
-            Math.max(-44, Math.min(44, ball.pos.z + (p.team === 'ARS' ? 8 : -8)))
+            Math.max(-44, Math.min(44, ball.pos.z + (p.team === 0 ? 8 : -8)))
           )
         : new THREE.Vector3(
             p.homePos.x + Math.sin(now * 0.0008 + p.phase) * 5.5,
@@ -2680,6 +3027,11 @@ function animate(now) {
     recordReplayFrame();
     updateTargetPlayer();
     drawMinimap();
+    screenTimer -= dt;
+    if (screenTimer <= 0) {
+      screenTimer = 0.5;
+      drawScoreScreens();
+    }
   }
 
   if (state.cardAnim.timer > 0) {
@@ -2698,15 +3050,86 @@ function animate(now) {
 requestAnimationFrame(animate);
 
 // --- 14. ÉVÉNEMENTS UI & DÉMARRAGE ---
-document.getElementById('btn-start-match').addEventListener('click', () => {
-  audio.init();
-  audio.blowWhistle(0.65);
+const originalModalHTML = document.getElementById('modal-content').innerHTML;
+function resetMatchState() {
+  Object.assign(state, {
+    matchTime: 0,
+    score: [0, 0],
+    redCards: [0, 0],
+    rep: 78,
+    acc: 85,
+    auth: 80,
+    stamina: 100,
+    selectedPlayer: null,
+    activeIncident: null,
+    scenario: null,
+    incidentTimer: 7,
+    setPiece: null,
+    goalCooldown: 0,
+    postLogCooldown: 0,
+    cardAnim: { type: null, timer: 0 },
+    whistled: false,
+    varActive: false,
+    paused: false,
+    halftimeDone: false,
+    addedAnnounced: false,
+    addedTime: 1.5,
+    visionTotal: 0,
+    visionCount: 0,
+    totalDecisions: 0,
+    correctDecisions: 0,
+    started: false
+  });
+
+  ['red-0', 'red-1'].forEach(id => {
+    const badge = document.getElementById(id);
+    badge.style.display = 'none';
+    badge.textContent = '🟥x1';
+  });
+  document.getElementById('stamina-fill').style.width = '100%';
+  document.getElementById('act-yellow').disabled = true;
+  document.getElementById('act-red').disabled = true;
+  document.getElementById('hud-score').textContent = '0 - 0';
+  document.getElementById('hud-clock').textContent = '00:00';
+  ['whistle-menu', 'var-overlay', 'setpiece-hud', 'vision-hud', 'action-banner', 'card-toast'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+
+  ball.pos.set(0, 0.22, 0);
+  ball.mesh.position.set(0, 0.22, 0);
+  ball.vel.set(0, 0, 0);
+  ball.owner = players[9] || null;
+  ball.lastTouchTeam = 0;
+  ball.freeFlight = false;
+
+  linesmen.forEach(lm => { lm.flagState = 'down'; });
+  state.goalNetRipple = [0, 0];
+  passCooldown = 2.4;
+  screenTimer = 0;
+  drawScoreScreens();
+  updateStats(0, 0, 0);
+}
+
+function startNewMatch() {
+  matchTeams = pickMatchup();
+  updateScoreboard();
+  buildMatchPlayers();
+  resetMatchState();
+  document.getElementById('match-log').innerHTML = '';
+  addLog(`🏟️ ${clubName(0)} reçoit ${clubName(1)} (${clubName(0)} évolue vers la zone +Z). Coup d'envoi imminent.`, '');
   state.started = true;
+  audio.blowWhistle(0.65);
   document.getElementById('modal-screen').classList.add('hidden');
-  addLog('📯 Coup d\'envoi donné ! Arsenal – Chelsea est lancé.', 'log-good');
   if (canvas.requestPointerLock) {
     try { canvas.requestPointerLock(); } catch (err) {}
   }
+}
+
+document.getElementById('btn-start-match').addEventListener('click', () => {
+  audio.init();
+  startNewMatch();
+  addLog('📯 Coup d\'envoi donné !', 'log-good');
 });
 
 document.getElementById('act-whistle').addEventListener('click', () => toggleWhistle());
@@ -2752,8 +3175,8 @@ document.querySelectorAll('#var-overlay button[data-vardec]').forEach(btn => {
     const inc = state.activeIncident;
     const offenderTeam = state.selectedPlayer
       ? state.selectedPlayer.team
-      : (inc ? inc.offender.team : 'ARS');
-    const benefitingTeam = offenderTeam === 'ARS' ? 'CHE' : 'ARS';
+      : (inc ? inc.offender.team : 0);
+    const benefitingTeam = 1 - offenderTeam;
     const restartSpot = state.whistled ? state.whistleBallPos.clone() : ball.pos.clone();
 
     const mapped = d === 'play'
@@ -2795,6 +3218,7 @@ document.querySelectorAll('#var-overlay button[data-vardec]').forEach(btn => {
 
 function finishMatch() {
   state.started = false;
+  state.scenario = null;
   audio.blowWhistle(0.85);
   if (document.pointerLockElement) document.exitPointerLock();
   document.getElementById('whistle-menu').classList.add('hidden');
@@ -2819,7 +3243,7 @@ function finishMatch() {
   const content = document.getElementById('modal-content');
   content.innerHTML = `
     <h1>COUP DE SIFFLET FINAL</h1>
-    <div class="subtitle">ARSENAL ${state.score[0]} – ${state.score[1]} CHELSEA · RAPPORT D'ARBITRAGE</div>
+    <div class="subtitle">${clubCode(0)} ${state.score[0]} – ${state.score[1]} ${clubCode(1)} · RAPPORT D'ARBITRAGE</div>
     <div class="controls-help">
       <div><span>Note de performance</span><strong>${rating.toFixed(1)} / 10</strong></div>
       <div><span>Réputation finale</span><strong>${state.rep} / 100</strong></div>
@@ -2830,12 +3254,16 @@ function finishMatch() {
       <div><span>Cartons rouges distribués</span><strong>${state.redCards[0] + state.redCards[1]}</strong></div>
       <div><span>Carrière</span><strong>${career.matches} match(s) · record ${career.bestRating.toFixed(1)}/10</strong></div>
     </div>
-    <button class="ref-btn btn-play" id="btn-replay" style="width:100%; justify-content:center; font-size:16px; padding:14px;">
-      🔄 NOUVEAU MATCH
+    <button class="ref-btn btn-play" id="btn-next-match" style="width:100%; justify-content:center; font-size:16px; padding:14px;">
+      🔄 MATCH SUIVANT — NOUVELLES ÉQUIPES
     </button>
   `;
   modal.classList.remove('hidden');
-  document.getElementById('btn-replay').addEventListener('click', () => window.location.reload());
+  document.getElementById('btn-next-match').addEventListener('click', () => {
+    modal.classList.add('hidden');
+    modal.innerHTML = originalModalHTML;
+    startNewMatch();
+  });
 }
 
 window.addEventListener('resize', () => {
