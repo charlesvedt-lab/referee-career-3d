@@ -390,7 +390,7 @@
   <div class="decision-grid">
     <button class="ref-btn" data-dec="foul">⚠️ Coup franc (Ici)</button>
     <button class="ref-btn" data-dec="handball">🤚 Main sifflée (Ici)</button>
-    <button class="ref-btn" data-dec="penalty">⚽ Penalty (Point 11m)</button>
+    <button class="ref-btn" id="dec-penalty" data-dec="penalty">⚽ Penalty (Point 11m)</button>
     <button class="ref-btn btn-yellow" data-dec="yellow">🟨 Carton Jaune</button>
     <button class="ref-btn btn-red" data-dec="red">🟥 Carton Rouge</button>
     <button class="ref-btn" data-dec="offside">🚩 Hors-jeu (Juge)</button>
@@ -617,8 +617,13 @@ const state = {
   stamina: 100,
   selectedPlayer: null,
   activeIncident: null,
-  scenario: null,
-  incidentTimer: 7,
+  duel: null,
+  duelCool: 1.5,
+  offsidePending: null,
+  decide: 1.5,
+  chasers: [],
+  passReceiver: null,
+  passTimer: 0,
   whistleBallPos: new THREE.Vector3(0, 0.22, 0),
   setPiece: null,
   goalNetRipple: [0, 0],
@@ -1048,7 +1053,34 @@ const CLUBS = [
   { code: 'BIL', name: 'Athletic Bilbao',   league: 'Liga',            kit: { shirt: '#ee2523', accent: '#f8fafc', shorts: '#111827', socks: '#ee2523', gk: '#7c3aed', style: 'sleeves' } }
 ];
 
-const CLUB_NAME_POOL = ['Moreau', 'Silva', 'Dubois', 'Rossi', 'Fernandez', 'Keller', 'Andersen', 'Okafor', 'Petrov', 'Marchetti', 'Lindgren', 'Costa', 'Yilmaz', 'Verhoeven', 'Gallagher', 'Mercier', 'DiMarco', 'Sanchez', 'Weber', 'Novak', 'Baptiste', 'Eriksen', 'Fontaine', 'Kovac', 'Lambrti', 'Ricci', 'Sorlund', 'Traore', 'Vidal', 'Wagner', 'Berger', 'Colombo', 'Fischer', 'Haddad', 'Ivanov', 'Janssen', 'Keita', 'Lombardi', 'Nilsson', 'Ortega', 'Pereira', 'Quinn', 'Reyes', 'Steiner'];
+// Effectifs reels 2024-25 : [nom, numero] dans l'ordre de la FORMATION (GK, 4 DEF, 3 MIL, 3 ATT)
+const SQUADS = {
+  ARS: [['Raya', 22], ['White', 4], ['Saliba', 2], ['Gabriel', 6], ['Calafiori', 33], ['Rice', 41], ['Partey', 5], ['Ødegaard', 8], ['Saka', 7], ['Havertz', 29], ['Martinelli', 11]],
+  LIV: [['Alisson', 1], ['Bradley', 12], ['Konaté', 5], ['Van Dijk', 4], ['Robertson', 26], ['Gravenberch', 38], ['Mac Allister', 10], ['Szoboszlai', 8], ['Salah', 11], ['Jota', 20], ['Gakpo', 18]],
+  MCI: [['Ederson', 31], ['Walker', 2], ['Dias', 3], ['Stones', 5], ['Gvardiol', 24], ['Rodri', 16], ['Kováčić', 8], ['De Bruyne', 17], ['Foden', 47], ['Haaland', 9], ['Doku', 11]],
+  TOT: [['Vicario', 13], ['Porro', 23], ['Romero', 17], ['Van de Ven', 37], ['Udogie', 38], ['Maddison', 10], ['Bentancur', 30], ['Kulusevski', 21], ['Son', 7], ['Solanke', 19], ['Johnson', 22]],
+  NEW: [['Pope', 22], ['Trippier', 2], ['Schär', 5], ['Botman', 4], ['Hall', 33], ['Guimarães', 39], ['Tonali', 8], ['Joelinton', 7], ['Isak', 14], ['Gordon', 10], ['Barnes', 11]],
+  RMA: [['Courtois', 1], ['Carvajal', 2], ['Militão', 3], ['Rüdiger', 22], ['Mendy', 23], ['Valverde', 15], ['Tchouaméni', 18], ['Bellingham', 5], ['Rodrygo', 11], ['Mbappé', 9], ['Vinícius', 7]],
+  BAR: [['Peña', 13], ['Koundé', 23], ['Cubarsí', 2], ['Martínez', 5], ['Balde', 3], ['Casadó', 17], ['Pedri', 8], ['Olmo', 20], ['Yamal', 19], ['Lewandowski', 9], ['Raphinha', 11]],
+  ATM: [['Oblak', 13], ['Llorente', 14], ['Giménez', 2], ['Le Normand', 24], ['Lenglet', 15], ['De Paul', 5], ['Barrios', 8], ['Gallagher', 4], ['Griezmann', 7], ['Álvarez', 19], ['Sørloth', 9]],
+  SEV: [['Nyland', 1], ['Carmona', 2], ['Badé', 23], ['Salas', 4], ['Acuña', 19], ['Gudelj', 6], ['Saúl', 18], ['Lokonga', 20], ['Lukebakio', 7], ['Isaac Romero', 16], ['Suso', 10]],
+  JUV: [['Di Gregorio', 29], ['Cambiaso', 27], ['Bremer', 3], ['Kalulu', 15], ['Danilo', 6], ['Locatelli', 5], ['Thuram', 16], ['Koopmeiners', 8], ['Yıldız', 10], ['Vlahović', 9], ['Conceição', 7]],
+  INT: [['Sommer', 1], ['Pavard', 28], ['Acerbi', 15], ['Bastoni', 95], ['Dumfries', 2], ['Barella', 23], ['Çalhanoğlu', 20], ['Mkhitaryan', 22], ['Lautaro', 10], ['Thuram', 9], ['Taremi', 99]],
+  MIL: [['Maignan', 16], ['Calabria', 2], ['Tomori', 23], ['Thiaw', 4], ['Theo Hernández', 19], ['Reijnders', 14], ['Fofana', 29], ['Loftus-Cheek', 8], ['Leão', 10], ['Morata', 7], ['Pulisic', 11]],
+  NAP: [['Meret', 1], ['Di Lorenzo', 22], ['Rrahmani', 13], ['Buongiorno', 4], ['Olivera', 17], ['Anguissa', 99], ['Lobotka', 68], ['McTominay', 8], ['Politano', 21], ['Lukaku', 11], ['Kvaratskhelia', 77]],
+  BAY: [['Neuer', 1], ['Laimer', 27], ['Upamecano', 2], ['Kim', 3], ['Davies', 19], ['Kimmich', 6], ['Pavlović', 45], ['Musiala', 42], ['Olise', 17], ['Kane', 9], ['Sané', 10]],
+  DOR: [['Kobel', 1], ['Ryerson', 26], ['Anton', 2], ['Schlotterbeck', 4], ['Bensebaini', 5], ['Groß', 13], ['Can', 23], ['Brandt', 19], ['Gittens', 10], ['Guirassy', 9], ['Adeyemi', 27]],
+  LEV: [['Hrádecký', 1], ['Frimpong', 30], ['Tapsoba', 12], ['Tah', 4], ['Hincapié', 6], ['Xhaka', 34], ['Palacios', 25], ['Wirtz', 10], ['Terrier', 21], ['Schick', 14], ['Boniface', 22]],
+  PSG: [['Donnarumma', 99], ['Hakimi', 2], ['Marquinhos', 5], ['Pacho', 51], ['Mendes', 25], ['Vitinha', 17], ['Ruiz', 8], ['João Neves', 87], ['Demébélé', 10], ['Barcola', 29], ['Kolo Muani', 7]],
+  OM:  [['Rulli', 1], ['Murillo', 3], ['Balerdi', 5], ['Theate', 36], ['Merlin', 94], ['Højbjerg', 6], ['Rongier', 21], ['Kondogbia', 22], ['Greenwood', 10], ['Aubameyang', 9], ['Luis Henrique', 50]],
+  OL:  [['Perri', 1], ['Maitland-Niles', 15], ['Niakhaté', 3], ['Tagliafico', 33], ['Kumbedi', 27], ['Tolisso', 8], ['Caqueret', 6], ['Cherki', 18], ['Lacazette', 10], ['Mikautadze', 9], ['Fofana', 29]],
+  MON: [['Köhn', 1], ['Vanderson', 2], ['Kehrer', 4], ['Salisu', 14], ['Caio Henrique', 12], ['Zakaria', 8], ['Camara', 17], ['Golovin', 7], ['Akliouche', 11], ['Embolo', 21], ['Minamino', 18]],
+  LIL: [['Chevalier', 30], ['Meunier', 27], ['Alexsandro', 4], ['Mandi', 24], ['Diakité', 18], ['André', 21], ['André Gomes', 6], ['Cabella', 10], ['David', 17], ['Zhegrova', 23], ['Haraldsson', 11]],
+  ROM: [['Svilar', 13], ['Çelik', 2], ['Mancini', 23], ["N'Dicka", 3], ['Angeliño', 15], ['Cristante', 4], ['Paredes', 5], ['Koné', 25], ['Dybala', 21], ['Dovbyk', 11], ['Soulé', 18]],
+  MUN: [['Onana', 24], ['Dalot', 20], ['de Ligt', 4], ['Martínez', 6], ['Mazraoui', 3], ['Mainoo', 37], ['Casemiro', 18], ['Fernandes', 8], ['Garnacho', 17], ['Højlund', 11], ['Rashford', 10]],
+  RBL: [['Gulácsi', 1], ['Henrichs', 3], ['Orban', 39], ['Klostermann', 4], ['Raum', 22], ['Seiwald', 6], ['Schlager', 13], ['Haidara', 8], ['Openda', 17], ['Šeško', 30], ['Xavi Simons', 10]],
+  BIL: [['Simón', 1], ['De Marcos', 18], ['Vivian', 3], ['Yeray', 5], ['Yuri', 12], ['Vesga', 6], ['Galarreta', 23], ['Sancet', 8], ['I. Williams', 9], ['N. Williams', 10], ['Sannadi', 11]]
+};
 
 const FORMATION = [
   { x: 0, z: -49, gk: true },
@@ -1254,15 +1286,12 @@ function clearPlayers() {
 
 function buildMatchPlayers() {
   clearPlayers();
-  const namePool = CLUB_NAME_POOL.slice();
-  for (let i = namePool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [namePool[i], namePool[j]] = [namePool[j], namePool[i]];
-  }
 
   matchTeams.forEach((mt, teamIdx) => {
+    const squad = SQUADS[mt.club.code] || SQUADS.ARS;
     FORMATION.forEach((slot, i) => {
-      const num = i + 1;
+      const entry = squad[i] || ['Joueur ' + (i + 1), i + 1];
+      const num = entry[1];
       const shirtMat = new THREE.MeshStandardMaterial({
         map: createPlayerTexture(mt.club, num, slot.gk),
         roughness: 0.55
@@ -1289,7 +1318,7 @@ function buildMatchPlayers() {
       rig.group.position.set(px, 0, pz);
       scene.add(rig.group);
 
-      const name = namePool[players.length];
+      const name = entry[0];
       const nameplate = createNameplateSprite(name, num, mt.club, slot.gk);
       nameplate.position.set(px, 2.26, pz);
       scene.add(nameplate);
@@ -1677,47 +1706,39 @@ function recordReplayFrame() {
 }
 
 // --- 8. GÉNÉRATEUR D'ACTIONS CONCRÈTES EN 3D (SANS AUCUN TEXTE SPOILER) ---
-const INCIDENT_KINDS = {
-  slide_foul:     { expected: ['foul', 'yellow'],             inBox: false, weight: 3, baseAnimTime: 3.2 },
-  clean_tackle:   { expected: ['play', 'resume'],             inBox: false, weight: 3, baseAnimTime: 3.2 },
-  handball:       { expected: ['penalty', 'handball', 'var'], inBox: true,  weight: 2, baseAnimTime: 4.2 },
-  handball_mid:   { expected: ['handball', 'foul', 'yellow'], inBox: false, weight: 2, baseAnimTime: 4.2 },
-  penalty_slide:  { expected: ['penalty', 'var', 'yellow'],   inBox: true,  weight: 2, baseAnimTime: 3.2 },
-  push:           { expected: ['foul', 'yellow'],             inBox: false, weight: 2, baseAnimTime: 3.2 },
-  reckless_slide: { expected: ['red', 'yellow'],              inBox: false, weight: 1, baseAnimTime: 3.2 },
-  offside:        { expected: ['offside', 'foul'],            inBox: false, weight: 2, baseAnimTime: 3.4 }
+
+// --- 8. ACTIONS ISSUES DU JEU REEL (DUELS, MAINS, HORS-JEU) ---
+const KIND_DEF = {
+  clean_tackle:   { expected: ['play', 'resume'] },
+  slide_foul:     { expected: ['foul', 'yellow'] },
+  reckless_slide: { expected: ['red', 'yellow'] },
+  handball:       { expected: ['penalty', 'handball', 'var'] },
+  handball_mid:   { expected: ['handball', 'foul', 'yellow'] },
+  offside:        { expected: ['offside', 'foul'] }
 };
 
-function pickIncidentKind(inBox, hasCarrier) {
-  const bag = [];
-  Object.keys(INCIDENT_KINDS).forEach(key => {
-    const k = INCIDENT_KINDS[key];
-    if (k.inBox && !(inBox && (key === 'handball' || key === 'penalty_slide'))) return;
-    if (key === 'handball' && !inBox) return;
-    if (key === 'handball' && !hasCarrier) return;
-    if (key === 'handball_mid' && !hasCarrier) return;
-    if (key === 'penalty_slide' && !inBox) return;
-    if (key === 'offside' && !hasCarrier) return;
-    for (let w = 0; w < k.weight; w++) bag.push(key);
-  });
-  if (!bag.length) return 'slide_foul';
-  return bag[Math.floor(Math.random() * bag.length)];
+function posInBoxOf(pos, teamIdx) {
+  const goalZ = teamIdx === 0 ? -PITCH_L / 2 : PITCH_L / 2;
+  const relZ = (pos.z - goalZ) * (teamIdx === 0 ? 1 : -1);
+  return relZ < 16.5 && relZ > -1.2 && Math.abs(pos.x) < 20.16;
 }
 
-function nearestOutfieldTo(pos, excludeTeamIdx, requireTeam) {
-  let best = null;
-  let bestD = Infinity;
+let kickBanTimer = 0;
+let kickBanPlayer = null;
+let HANDBALL_PROB = 2.6;
+
+function attackDirOf(teamIdx) { return teamIdx === 0 ? 1 : -1; }
+
+function offsideLineZ(attackTeam) {
+  const d = attackDirOf(attackTeam);
+  let bestRel = -Infinity;
+  let bestZ = 0;
   players.forEach(p => {
-    if (p.isGK || p.redCard) return;
-    if (requireTeam !== undefined && requireTeam !== null && p.team !== requireTeam) return;
-    if (p.team === excludeTeamIdx) return;
-    const d = p.pos.distanceTo(pos);
-    if (d < bestD) {
-      bestD = d;
-      best = p;
-    }
+    if (p.team === attackTeam || p.isGK || p.redCard) return;
+    const rel = p.pos.z * d;
+    if (rel > bestRel) { bestRel = rel; bestZ = p.pos.z; }
   });
-  return best;
+  return bestZ;
 }
 
 function showVisionHUD(dist) {
@@ -1731,17 +1752,16 @@ function showVisionHUD(dist) {
 }
 
 function buildActiveIncident(kind, victim, offender) {
-  const def = INCIDENT_KINDS[kind] || INCIDENT_KINDS.slide_foul;
+  const def = KIND_DEF[kind] || KIND_DEF.slide_foul;
   const refDist = referee.pos.distanceTo(victim.pos);
   state.visionTotal += refDist;
   state.visionCount++;
   const vision = showVisionHUD(refDist);
   state.activeIncident = {
     type: kind,
-    kind: kind === 'penalty_slide' ? 'slide_foul' : kind === 'handball_mid' ? 'handball' : kind,
-    baseKind: kind,
+    kind,
     expected: def.expected,
-    inBox: def.inBox,
+    inBox: posInBoxOf(victim.pos, 1 - victim.team),
     offender,
     victim,
     visionDist: refDist,
@@ -1757,210 +1777,245 @@ function looseBallKick(dir, power, up) {
   ball.freeFlight = true;
 }
 
-function triggerRandomIncident() {
-  if (state.activeIncident || state.scenario || state.whistled || state.varActive || state.setPiece) return;
-
-  const carrier = (ball.owner && !ball.owner.isGK && !ball.owner.redCard) ? ball.owner : null;
-  const subject = carrier || players.filter(p => !p.isGK && !p.redCard)[0];
-  if (!subject) {
-    state.incidentTimer = 6;
-    return;
-  }
-  const offenders = players.filter(p => !p.isGK && !p.redCard && p.team !== subject.team);
-  const offender = offenders[Math.floor(Math.random() * offenders.length)];
-  if (!offender) {
-    state.incidentTimer = 6;
-    return;
-  }
-
-  const victim = carrier || nearestOutfieldTo(ball.pos, offender.team, null) || subject;
-  const inBox = Math.abs(victim.pos.z) > 34.5 && Math.abs(victim.pos.x) < 20.2;
-  const kind = pickIncidentKind(inBox, !!carrier);
-
-  state.scenario = {
-    kind,
-    victim,
-    offender,
-    carrier,
-    phase: kind === 'offside' ? 'run' : kind === 'handball' ? 'lead' : 'approach',
-    timer: INCIDENT_KINDS[kind].baseAnimTime,
-    animPhase: Math.random() * 6,
-    lineZ: null,
-    passed: false
-  };
+function shootBall(shooter, goalZ) {
+  if (typeof window !== 'undefined' && window.__scount) window.__scount[shooter.team]++;
+  const aimX = Math.random() < 0.18 ? (Math.random() < 0.5 ? -1 : 1) * (3.9 + Math.random() * 1.6) : (Math.random() - 0.5) * 6.8;
+  const target = new THREE.Vector3(aimX, 0.4 + Math.random() * 1.8, goalZ + attackDirOf(shooter.team) * 0.8);
+  const dir = target.clone().sub(ball.pos);
+  dir.normalize();
+  const dist = ball.pos.distanceTo(target);
+  const power = THREE.MathUtils.clamp(dist * 1.05, 12, 19);
+  ball.vel.set(dir.x * power, Math.max(0.6, dir.y * power), dir.z * power);
+  ball.owner = null;
+  ball.freeFlight = true;
+  ball.lastTouchTeam = shooter.team;
+  audio.kickSound(0.3);
+  state.decide = 1.4;
+  kickBanTimer = 0.55;
+  kickBanPlayer = shooter;
 }
 
-function cancelScenario() {
-  state.scenario = null;
-  state.incidentTimer = 6 + Math.random() * 4;
+function kickPass(passer, receiver) {
+  const toR = receiver.pos.clone().sub(passer.pos).setY(0).normalize();
+  const lead = receiver.pos.clone().addScaledVector(toR, 1.6);
+  const dir = new THREE.Vector3(lead.x - ball.pos.x, 0, lead.z - ball.pos.z);
+  const dist = dir.length();
+  dir.normalize();
+  const power = THREE.MathUtils.clamp(dist * 0.75, 7.5, 13.5);
+  ball.vel.set(dir.x * power, 0.9, dir.z * power);
+  ball.owner = null;
+  ball.freeFlight = true;
+  ball.lastTouchTeam = passer.team;
+  audio.kickSound(0.2);
+  kickBanTimer = 0.55;
+  kickBanPlayer = passer;
+  state.passReceiver = receiver;
+  state.passTimer = 3;
+
+  const d = attackDirOf(passer.team);
+  const lineZ = offsideLineZ(passer.team);
+  if (receiver.pos.z * d > lineZ * d + 0.4 && receiver.pos.z * d > ball.pos.z * d + 0.5) {
+    state.offsidePending = { receiver, timer: 3.5 };
+  }
 }
 
-function resolveScenarioContact(sc) {
-  const victim = sc.victim;
-  const offender = sc.offender;
-  const toV = victim.pos.clone().sub(offender.pos).setY(0).normalize();
+function updateCarrierAI(dt, now) {
+  const carrier = ball.owner;
+  if (!carrier || carrier.redCard) return;
+  if (state.decide > 0) return;
+  state.decide = 0.9 + Math.random() * 1.7;
 
-  if (sc.kind === 'slide_foul' || sc.kind === 'reckless_slide' || sc.kind === 'penalty_slide' || sc.kind === 'clean_tackle') {
-    offender.slidingTackle = sc.kind === 'clean_tackle' ? 1.4 : 1.6;
-    offender.slideDir.copy(toV);
-    spawnTurfSplash(victim.pos);
-    audio.kickSound(0.24);
+  const dirZ = attackDirOf(carrier.team);
+  const goalZ = dirZ * (PITCH_L / 2);
+  const distGoal = Math.abs(goalZ - carrier.pos.z);
 
-    if (sc.kind === 'clean_tackle') {
-      ball.lastTouchTeam = offender.team;
-      looseBallKick(new THREE.Vector3(toV.x, 0, toV.z), 11.5, 2.0);
-      victim.fallen = true;
-      victim.fallTimer = 3.2;
-    } else {
-      ball.lastTouchTeam = victim.team;
-      looseBallKick(new THREE.Vector3(toV.z, 0, -toV.x), 4.5, 1.2);
-      victim.fallen = true;
-      victim.fallTimer = 5.5;
-      victim.rig.group.rotation.y = Math.atan2(-toV.z, toV.x);
-    }
-  } else if (sc.kind === 'handball' || sc.kind === 'handball_mid') {
-    offender.handballRaise = 3.5;
-    ball.lastTouchTeam = offender.team;
+  const mates = players.filter(p => p.team === carrier.team && p !== carrier && !p.redCard && !p.isGK);
+
+  if (carrier.isGK) {
+    let receiver = null;
+    let bestScore = -Infinity;
+    mates.forEach(m => {
+      if (m.pos.distanceTo(carrier.pos) < 5) return;
+      const score = m.pos.z * dirZ + Math.random() * 8;
+      if (score > bestScore) { bestScore = score; receiver = m; }
+    });
+    if (receiver) kickPass(carrier, receiver);
+    return;
+  }
+
+  if (distGoal < 34 && Math.abs(carrier.pos.x) < 20 && Math.random() < (distGoal < 21 ? 0.62 : 0.22)) {
+    shootBall(carrier, goalZ);
+    return;
+  }
+
+  if (Math.random() < 0.72 && mates.length) {
+    let receiver = null;
+    let bestScore = -Infinity;
+    mates.forEach(m => {
+      const mDist = m.pos.distanceTo(carrier.pos);
+      if (mDist < 4 || mDist > 34) return;
+      const advance = (m.pos.z - carrier.pos.z) * dirZ;
+      const score = advance * 1.4 - mDist * 0.25 + Math.random() * 10;
+      if (score > bestScore) { bestScore = score; receiver = m; }
+    });
+    if (receiver) { kickPass(carrier, receiver); return; }
+  }
+}
+
+function computePressers() {
+  state.chasers = [];
+  if (state.setPiece || state.activeIncident || state.duel) return;
+
+  if (ball.owner && !ball.owner.isGK && !ball.owner.redCard) {
+    const defTeam = 1 - ball.owner.team;
+    const opts = players
+      .filter(p => p.team === defTeam && !p.isGK && !p.redCard && !p.fallen)
+      .sort((a, b) => a.pos.distanceTo(ball.owner.pos) - b.pos.distanceTo(ball.owner.pos));
+    state.chasers = opts.slice(0, 2);
+  } else if (ball.freeFlight || !ball.owner) {
+    const near = p => p.pos.distanceTo(ball.pos);
+    [0, 1].forEach(t => {
+      const opts = players
+        .filter(p => p.team === t && !p.isGK && !p.redCard && !p.fallen)
+        .sort((a, b) => near(a) - near(b));
+      if (opts.length && (near(opts[0]) < 16 || ball.vel.length() < 2.5)) {
+        state.chasers.push(opts[0]);
+      }
+    });
+  }
+}
+
+function updateDuels(dt) {
+  if (state.duel) {
+    const d = state.duel;
+    d.timer -= dt;
+    d.animPhase += dt * 8.5;
+
+    const press = d.presser;
+    const carry = d.carrier;
+    [press, carry].forEach(p => {
+      const s = Math.sin(d.animPhase) * 0.6;
+      p.rig.leftLeg.rotation.x = s;
+      p.rig.rightLeg.rotation.x = -s;
+      p.rig.leftArmPivot.rotation.x = -s * 0.6;
+      p.rig.rightArmPivot.rotation.x = s * 0.6;
+    });
+    press.rig.group.rotation.y = Math.atan2(carry.pos.x - press.pos.x,carry.pos.z - press.pos.z);
+    carry.rig.group.rotation.y = attackDirOf(carry.team) === 1 ? 0 : Math.PI;
+
+    if (d.timer <= 0) resolveDuel(d);
+    return;
+  }
+
+  if (state.duelCool > 0 || !ball.owner || ball.owner.isGK) return;
+  const carrier = ball.owner;
+  const presser = (state.chasers || []).find(p => p.pos.distanceTo(carrier.pos) < 1.35);
+  if (presser) {
+    state.duel = { presser, carrier, timer: 0.45 + Math.random() * 0.5, animPhase: Math.random() * 6 };
+  }
+}
+
+function resolveDuel(d) {
+  const carrier = d.carrier;
+  const presser = d.presser;
+  if (carrier.redCard || presser.redCard) {
+    state.duel = null;
+    return;
+  }
+
+  state.duel = null;
+  state.duelCool = 2.2 + Math.random() * 2.5;
+
+  const toC = carrier.pos.clone().sub(presser.pos).setY(0).normalize();
+  const r = Math.random();
+
+  if (r < 0.36) {
+    carrier.fallen = true;
+    carrier.fallTimer = 2.6;
     ball.owner = null;
-    ball.freeFlight = true;
-    ball.pos.set(offender.pos.x + toV.x * 0.38, 1.48, offender.pos.z + toV.z * 0.38);
-    ball.vel.set((Math.random() - 0.5) * 4.2, 2.8, (Math.random() - 0.5) * 4.2);
-    audio.kickSound(0.2);
-    victim.rig.group.rotation.y = Math.atan2(offender.pos.x - victim.pos.x, offender.pos.z - victim.pos.z);
-  } else if (sc.kind === 'push') {
-    offender.pos.copy(victim.pos).addScaledVector(toV, -0.75);
-    offender.pushAnim = 2.2;
-    victim.fallen = true;
-    victim.fallTimer = 4.5;
-    ball.lastTouchTeam = victim.team;
-    looseBallKick(toV, 3.8, 0.4);
+    ball.lastTouchTeam = presser.team;
+    looseBallKick(new THREE.Vector3(toC.x, 0, toC.z), 9 + Math.random() * 3, 2.2);
+    buildActiveIncident('clean_tackle', carrier, presser);
+  } else if (r < 0.60) {
+    presser.slidingTackle = 1.6;
+    presser.slideDir.copy(toC);
+    spawnTurfSplash(carrier.pos);
+    audio.kickSound(0.24);
+    carrier.fallen = true;
+    carrier.fallTimer = 5.5;
+    carrier.rig.group.rotation.y = Math.atan2(-toC.z, toC.x);
+    ball.owner = null;
+    ball.lastTouchTeam = carrier.team;
+    looseBallKick(new THREE.Vector3(toC.z, 0, -toC.x), 4.2, 1.1);
+    buildActiveIncident('slide_foul', carrier, presser);
+  } else if (r < 0.66) {
+    presser.slidingTackle = 1.8;
+    presser.slideDir.copy(toC);
+    spawnTurfSplash(carrier.pos);
+    audio.kickSound(0.3);
+    carrier.fallen = true;
+    carrier.fallTimer = 6.5;
+    carrier.rig.group.rotation.y = Math.atan2(-toC.z, toC.x);
+    ball.owner = null;
+    ball.lastTouchTeam = carrier.team;
+    looseBallKick(new THREE.Vector3(toC.z, 0, -toC.x), 3.6, 1.4);
+    buildActiveIncident('reckless_slide', carrier, presser);
   } else {
-    return;
+    const fwd = new THREE.Vector3(
+      Math.sin(carrier.rig.group.rotation.y),
+      0,
+      Math.cos(carrier.rig.group.rotation.y)
+    );
+    ball.owner = null;
+    ball.lastTouchTeam = carrier.team;
+    looseBallKick(fwd, 5.5, 0.6);
+    state.decide = 0.6 + Math.random() * 0.8;
   }
-
-  buildActiveIncident(sc.kind, victim, offender);
-  state.scenario = null;
 }
 
-function driveScenario(dt) {
-  const sc = state.scenario;
-  if (!sc) return;
+function checkHandballEvent(dt) {
+  if (!ball.freeFlight || state.activeIncident || state.whistled || state.setPiece) return;
+  if (ball.vel.length() < 5.2 || ball.pos.y < 0.72 || ball.pos.y > 2.05) return;
 
-  if (state.whistled || state.varActive || state.setPiece) {
-    cancelScenario();
-    return;
-  }
+  const offenders = players.filter(p =>
+    !p.isGK && !p.redCard && !p.fallen &&
+    p.team !== ball.lastTouchTeam &&
+    p.pos.distanceTo(new THREE.Vector3(ball.pos.x, 0, ball.pos.z)) < 0.75
+  );
+  if (!offenders.length) return;
+  if (Math.random() > dt * HANDBALL_PROB) return;
 
-  sc.timer -= dt;
-  sc.animPhase += dt * 8.5;
+  const offender = offenders[0];
+  const inBox = posInBoxOf(ball.pos, offender.team);
+  offender.handballRaise = 3.5;
+  audio.kickSound(0.2);
 
-  const victim = sc.victim;
-  const offender = sc.offender;
-  const carrier = sc.carrier;
-  const attackDir = victim.team === 0 ? 1 : -1;
+  const victim = players.find(p =>
+    p.team !== offender.team && !p.isGK && !p.redCard &&
+    p.pos.distanceTo(offender.pos) < 3.5
+  ) || offender;
 
-  const runAnim = p => {
-    const s = Math.sin(sc.animPhase) * 0.6;
-    p.rig.leftLeg.rotation.x = s;
-    p.rig.rightLeg.rotation.x = -s;
-    p.rig.leftArmPivot.rotation.x = -s * 0.6;
-    p.rig.rightArmPivot.rotation.x = s * 0.6;
-  };
+  ball.vel.set((Math.random() - 0.5) * 3.4, 1.6 + Math.random(), (Math.random() - 0.5) * 3.4);
+  ball.lastTouchTeam = offender.team;
+  buildActiveIncident(inBox ? 'handball' : 'handball_mid', victim, offender);
+}
 
-  const moveTowards = (p, target, speed) => {
-    const to = target.clone().sub(p.pos).setY(0);
-    const dist = to.length();
-    if (dist > 0.25 && speed > 0) {
-      const dir = to.normalize();
-      p.pos.addScaledVector(dir, Math.min(speed * dt, dist));
-      p.rig.group.rotation.y = Math.atan2(dir.x, dir.z);
-    }
-    return dist;
-  };
+function evaluateOffsidePending() {
+  const pend = state.offsidePending;
+  if (!pend) return;
+  const r = pend.receiver;
+  const nearBall = ball.owner === r ||
+    (ball.freeFlight && Math.hypot(ball.pos.x - r.pos.x, ball.pos.z - r.pos.z) < 1.1);
+  if (!nearBall) return;
 
-  if (sc.kind === 'offside') {
-    if (ball.owner !== carrier) {
-      cancelScenario();
-      return;
-    }
-    if (sc.phase === 'run') {
-      let lineZ = attackDir === 1 ? -PITCH_L / 2 : PITCH_L / 2;
-      players.forEach(d => {
-        if (d.isGK || d.redCard || d.team === victim.team) return;
-        if (attackDir === 1 && d.pos.z > lineZ) lineZ = d.pos.z;
-        if (attackDir === -1 && d.pos.z < lineZ) lineZ = d.pos.z;
-      });
-      sc.lineZ = lineZ;
-      const leadZ = attackDir === 1 ? Math.min(46, lineZ + 2.6) : Math.max(-46, lineZ - 2.6);
-      moveTowards(victim, new THREE.Vector3(victim.pos.x * 0.25, 0, leadZ), 6.4);
-      runAnim(victim);
-      moveTowards(offender, victim.pos, 4.6);
-      runAnim(offender);
-
-      const beyondLine = attackDir === 1 ? victim.pos.z > lineZ + 0.4 : victim.pos.z < lineZ - 0.4;
-      if (beyondLine) {
-        const lm = linesmen[victim.pos.x < 0 ? 0 : 1];
-        lm.flagState = 'offside';
-      }
-
-      if (sc.timer <= 0) {
-        if (beyondLine) {
-          ball.owner = null;
-          ball.freeFlight = true;
-          const leadPoint = new THREE.Vector3(Math.max(-30, Math.min(30, victim.pos.x * 0.6)), 0.6, victim.pos.z + attackDir * 1.5);
-          const passDir = leadPoint.clone().sub(ball.pos).normalize();
-          const power = THREE.MathUtils.clamp(ball.pos.distanceTo(leadPoint) * 0.85, 7, 15);
-          ball.vel.set(passDir.x * power, 1.1, passDir.z * power);
-          ball.lastTouchTeam = carrier.team;
-          audio.kickSound(0.22);
-          buildActiveIncident('offside', victim, victim);
-          cancelScenario();
-        } else {
-          cancelScenario();
-        }
-        return;
-      }
-    }
-    return;
-  }
-
-  if (sc.phase === 'approach' || sc.phase === 'push') {
-    const contactDist = sc.phase === 'push' ? 1.0 : 1.05;
-    if (ball.owner === victim) {
-      victim.pos.z = THREE.MathUtils.clamp(victim.pos.z + attackDir * 2.4 * dt, -46, 46);
-      victim.rig.group.rotation.y = attackDir === 1 ? 0 : Math.PI;
-      runAnim(victim);
-    }
-    const dist = moveTowards(offender, victim.pos, sc.phase === 'push' ? 5.0 : 5.4);
-    runAnim(offender);
-    if (dist <= contactDist || sc.timer <= 0.3) {
-      resolveScenarioContact(sc);
-    }
-    return;
-  }
-
-  if (sc.phase === 'lead') {
-    if (!sc.passed) {
-      ball.owner = null;
-      ball.freeFlight = true;
-      const chest = offender.pos.clone().setY(1.35);
-      const dir = chest.clone().sub(ball.pos).normalize();
-      const power = 7 + Math.random() * 8;
-      ball.vel.set(dir.x * power, Math.max(1.2, dir.y * power * 0.25), dir.z * power);
-      ball.lastTouchTeam = victim.team;
-      audio.kickSound(0.2);
-      sc.passed = true;
-    } else {
-      const dx = ball.pos.x - offender.pos.x;
-      const dz = ball.pos.z - offender.pos.z;
-      if (Math.sqrt(dx * dx + dz * dz) < 0.9 && ball.pos.y < 2.05 && ball.pos.y > 0.25) {
-        resolveScenarioContact(sc);
-      } else if (ball.pos.distanceTo(victim.pos) > 30 || sc.timer <= 0) {
-        cancelScenario();
-      }
-    }
-    return;
-  }
+  state.offsidePending = null;
+  if (state.whistled || state.activeIncident || state.setPiece) return;
+  const lm = linesmen[r.pos.x < 0 ? 0 : 1];
+  lm.flagState = 'offside';
+  ball.owner = null;
+  ball.freeFlight = false;
+  ball.vel.set(0, 0, 0);
+  buildActiveIncident('offside', r, r);
 }
 
 function clearIncident(missed = false) {
@@ -1979,7 +2034,6 @@ function clearIncident(missed = false) {
   linesmen.forEach(lm => { lm.flagState = 'down'; });
   document.getElementById('vision-hud').classList.add('hidden');
   state.activeIncident = null;
-  state.incidentTimer = 8 + Math.random() * 6;
 }
 
 // --- 9. COUPS FRANCS, PENALTIES, CORNERS & TOUCHES SELON LES RÈGLES DU FOOTBALL ---
@@ -2162,6 +2216,7 @@ function executeSetPieceShot() {
 }
 
 function handleGoalScored(scoringTeamIdx) {
+  if (typeof window !== 'undefined' && window.__gcount) window.__gcount[scoringTeamIdx]++;
   if (state.goalCooldown > 0) return;
   state.goalCooldown = 4.0;
   state.score[scoringTeamIdx]++;
@@ -2188,7 +2243,7 @@ function handleGoalScored(scoringTeamIdx) {
 
 // --- 9bis. SORTIES DE BALLES AUTOMATIQUES (TOUCHE / CORNER / 6M) ---
 function handleBallOut(mode) {
-  if (state.setPiece || state.goalCooldown > 0 || state.activeIncident || state.scenario) return;
+  if (state.setPiece || state.goalCooldown > 0 || state.activeIncident) return;
 
   const lastTeam = typeof ball.lastTouchTeam === 'number' ? ball.lastTouchTeam : 0;
   let spType = 'restart';
@@ -2228,6 +2283,7 @@ function closeWhistleMenu() {
   document.getElementById('whistle-menu').classList.add('hidden');
   document.getElementById('act-yellow').disabled = true;
   document.getElementById('act-red').disabled = true;
+  document.getElementById('dec-penalty').disabled = true;
 }
 
 function toggleWhistle(forceStop) {
@@ -2257,6 +2313,12 @@ function toggleWhistle(forceStop) {
     document.getElementById('act-yellow').disabled = false;
     document.getElementById('act-red').disabled = false;
 
+    const offT = state.selectedPlayer
+      ? state.selectedPlayer.team
+      : (state.activeIncident ? state.activeIncident.offender.team : null);
+    const penOk = offT !== null && posInBoxOf(state.whistleBallPos, offT);
+    document.getElementById('dec-penalty').disabled = !penOk;
+
     const targetTxt = state.selectedPlayer
       ? `${clubCode(state.selectedPlayer.team)} — ${state.selectedPlayer.fullName} ${state.selectedPlayer.yellowCards > 0 ? '(Déjà 1 🟨)' : ''}`
       : 'Aucun joueur visé (visez un joueur avec le réticule central)';
@@ -2265,8 +2327,9 @@ function toggleWhistle(forceStop) {
     document.getElementById('whistle-spot-label').textContent =
       `📍 Ballon au sifflet : X=${state.whistleBallPos.x.toFixed(1)}m, Z=${state.whistleBallPos.z.toFixed(1)}m — arbitre à ${whistleDist}m du ballon`;
 
-    document.getElementById('whistle-context').textContent =
-      'Sanctionnez le joueur visé ou choisissez la reprise du jeu réglementaire. Buts poteaux et sorties de ballon sont détectées automatiquement.';
+    document.getElementById('whistle-context').textContent = penOk
+      ? 'Faute dans la surface : penalty autorisé (Point 11m). Buts poteaux et sorties de ballon sont détectées automatiquement.'
+      : 'Faute hors surface : penalty refusé, seul le coup franc est réglementaire. Buts poteaux et sorties de ballon sont détectées automatiquement.';
   } else {
     closeWhistleMenu();
   }
@@ -2284,6 +2347,17 @@ function resolveDecision(dec) {
     toggleWhistle(false);
     addLog('▶️ Balle à terre — Le jeu reprend.', '');
     return;
+  }
+
+  if (dec === 'penalty') {
+    const offT = state.selectedPlayer
+      ? state.selectedPlayer.team
+      : (state.activeIncident ? state.activeIncident.offender.team : null);
+    if (offT === null || !posInBoxOf(state.whistleBallPos, offT)) {
+      addLog('⛔ Penalty refusé : la faute est hors de la surface — coup franc.', 'log-warn');
+      updateStats(-2, -4, -1);
+      dec = 'foul';
+    }
   }
 
   if (dec === 'yellow' || dec === 'red') {
@@ -2407,7 +2481,9 @@ function startHalftime() {
   state.whistled = false;
   state.activeIncident = null;
   state.setPiece = null;
-  state.incidentTimer = 6 + Math.random() * 4;
+  state.duel = null;
+  state.offsidePending = null;
+  state.chasers = [];
   linesmen.forEach(lm => { lm.flagState = 'down'; });
   ball.freeFlight = false;
   ball.vel.set(0, 0, 0);
@@ -2580,7 +2656,6 @@ function drawMinimap() {
 
 // --- 13. BOUCLE PRINCIPALE DE SIMULATION ---
 let lastTime = performance.now();
-let passCooldown = 2.4;
 let screenTimer = 0;
 
 function animate(now) {
@@ -2722,12 +2797,7 @@ function animate(now) {
         }
         if (sp.timer <= 0) executeSetPieceShot();
       }
-    } else if (state.scenario) {
-      driveScenario(dt);
-    } else if (!state.activeIncident) {
-      state.incidentTimer -= dt;
-      if (state.incidentTimer <= 0) triggerRandomIncident();
-    } else {
+    } else if (state.activeIncident) {
       state.activeIncident.expiresIn -= dt;
       if (state.activeIncident.expiresIn <= 0) clearIncident(true);
     }
@@ -2745,43 +2815,22 @@ function animate(now) {
       }
     });
 
-    passCooldown -= dt;
-    if (passCooldown <= 0 && !state.activeIncident && !state.scenario && !state.setPiece && !ball.freeFlight) {
-      passCooldown = 2.6 + Math.random() * 2.0;
-      const activeOutfield = players.filter(p => !p.isGK && !p.redCard);
-      const passer = ball.owner && !ball.owner.redCard
-        ? ball.owner
-        : activeOutfield[Math.floor(Math.random() * activeOutfield.length)];
+    state.decide -= dt;
+    if (state.duelCool > 0) state.duelCool -= dt;
+    if (kickBanTimer > 0) kickBanTimer -= dt;
+    if (state.passTimer > 0) {
+      state.passTimer -= dt;
+      if (state.passTimer <= 0) state.passReceiver = null;
+    }
+    if (state.offsidePending) {
+      state.offsidePending.timer -= dt;
+      if (state.offsidePending.timer <= 0) state.offsidePending = null;
+    }
 
-      const dirZ = passer.team === 0 ? 1 : -1;
-      const goalZ = dirZ * (PITCH_L / 2);
-      const distToGoal = Math.abs(goalZ - passer.pos.z);
-
-      if (distToGoal < 25 && Math.random() < 0.42) {
-        const aimX = (Math.random() - 0.5) * 5.8;
-        const aimY = 0.5 + Math.random() * 1.5;
-        const target = new THREE.Vector3(aimX, aimY, goalZ + dirZ * 0.8);
-        const dir = target.sub(ball.pos).normalize();
-        ball.vel.copy(dir.multiplyScalar(14.5));
-        ball.lastTouchTeam = passer.team;
-        ball.owner = null;
-        ball.freeFlight = true;
-        audio.kickSound(0.28);
-      } else {
-        const teammates = activeOutfield.filter(p => p.team === passer.team && p !== passer);
-        if (teammates.length > 0) {
-          const receiver = teammates[Math.floor(Math.random() * teammates.length)];
-          const dir = receiver.pos.clone().add(new THREE.Vector3(0, 0.22, 0)).sub(ball.pos);
-          const dist = dir.length();
-          dir.normalize();
-          ball.vel.copy(dir.multiplyScalar(Math.min(12.0, Math.max(6.2, dist * 0.55))));
-          ball.vel.y = 0.9;
-          ball.lastTouchTeam = passer.team;
-          ball.owner = null;
-          ball.freeFlight = true;
-          audio.kickSound(0.18);
-        }
-      }
+    if (!state.setPiece && !state.activeIncident) {
+      if (!state.duel && !ball.freeFlight) updateCarrierAI(dt, now);
+      computePressers();
+      updateDuels(dt);
     }
 
     if (ball.freeFlight) {
@@ -2842,26 +2891,34 @@ function animate(now) {
       else if (Math.abs(ball.pos.x) > PITCH_W / 2 + 0.4) handleBallOut('sideline');
       else if (Math.abs(ball.pos.z) > PITCH_L / 2 + 0.4) handleBallOut('endline');
 
+      checkHandballEvent(dt);
+      evaluateOffsidePending();
+
       players.forEach(p => {
         if (p.redCard) return;
         const d = p.pos.distanceTo(new THREE.Vector3(ball.pos.x, 0, ball.pos.z));
-        if (p.isGK && d < 1.35 && ball.pos.y < 2.55) {
+        if (p.isGK && d < 1.05 && ball.pos.y < 2.35) {
           const saveDirZ = p.team === 0 ? 1 : -1;
           ball.vel.set((Math.random() - 0.5) * 8, 3.2, saveDirZ * 8.5);
           ball.lastTouchTeam = p.team;
           audio.kickSound(0.25);
           addLog(`🧤 Arrêt de ${p.fullName} !`, 'log-good');
-        } else if (!p.isGK && d < 0.85 && ball.pos.y < 1.3 && ball.vel.length() < 9.5) {
+        } else if (!p.isGK && d < 0.85 && ball.pos.y < 1.3 && ball.vel.length() < 9.5 && !(kickBanTimer > 0 && kickBanPlayer === p)) {
           ball.owner = p;
           ball.lastTouchTeam = p.team;
           ball.freeFlight = false;
+          state.decide = 0.7 + Math.random() * 1.3;
+          state.passReceiver = null;
+          state.passTimer = 0;
         }
       });
 
-      if (ball.vel.length() < 0.6 && ball.pos.y <= 0.23) {
-        ball.freeFlight = false;
+      if (ball.vel.length() < 0.55 && ball.pos.y <= 0.23) {
+        ball.vel.set(0, 0, 0);
+        ball.pos.y = 0.22;
       }
     } else if (ball.owner && !ball.owner.redCard && !state.setPiece) {
+      if (typeof window !== 'undefined' && window.__poss) window.__poss[ball.owner.team]++;
       const fwd = new THREE.Vector3(
         Math.sin(ball.owner.rig.group.rotation.y),
         0,
@@ -2869,6 +2926,17 @@ function animate(now) {
       );
       ball.pos.copy(ball.owner.pos).addScaledVector(fwd, 0.55);
       ball.pos.y = 0.22 + Math.abs(Math.sin(now * 0.021)) * 0.16;
+    } else if (!ball.owner && !state.setPiece) {
+      const taker = players
+        .filter(p => !p.isGK && !p.redCard && !p.fallen && p.slidingTackle <= 0 && p.pos.distanceTo(new THREE.Vector3(ball.pos.x, 0, ball.pos.z)) < 0.85)
+        .sort((a, b) => a.pos.distanceTo(ball.pos) - b.pos.distanceTo(ball.pos))[0];
+      if (taker) {
+        ball.owner = taker;
+        ball.lastTouchTeam = taker.team;
+        state.decide = 0.7 + Math.random() * 1.3;
+        state.passReceiver = null;
+        state.passTimer = 0;
+      }
     }
 
     ball.mesh.position.copy(ball.pos);
@@ -2941,7 +3009,7 @@ function animate(now) {
         return;
       }
 
-      if (state.scenario && (state.scenario.victim === p || state.scenario.offender === p || state.scenario.carrier === p)) return;
+      if (state.duel && (state.duel.presser === p || state.duel.carrier === p)) return;
 
       if (p.isGK) {
         const goalZ = p.team === 0 ? -51.0 : 51.0;
@@ -2961,28 +3029,38 @@ function animate(now) {
         return;
       }
 
-      const isBallCarrier = ball.owner === p;
-      const targetPos = isBallCarrier
-        ? new THREE.Vector3(
-            Math.max(-30, Math.min(30, ball.pos.x + (p.team === 0 ? 4 : -4))),
-            0,
-            Math.max(-44, Math.min(44, ball.pos.z + (p.team === 0 ? 8 : -8)))
-          )
-        : new THREE.Vector3(
-            p.homePos.x + Math.sin(now * 0.0008 + p.phase) * 5.5,
-            0,
-            Math.max(-45, Math.min(45, ball.pos.z * 0.52 + p.homePos.z * 0.48))
-          );
+      let targetPos;
+      let moveSpd = 3.0;
+
+      if (ball.owner === p) {
+        targetPos = new THREE.Vector3(
+          THREE.MathUtils.clamp(ball.pos.x + (p.team === 0 ? 5 : -5) + Math.sin(now * 0.0011 + p.phase) * 4, -30, 30),
+          0,
+          THREE.MathUtils.clamp(ball.pos.z + (p.team === 0 ? 9 : -9), -45, 45)
+        );
+        moveSpd = 4.6;
+      } else if ((state.chasers && state.chasers.indexOf(p) !== -1) || state.passReceiver === p) {
+        const tx = ball.owner ? ball.owner.pos.x : ball.pos.x;
+        const tz = ball.owner ? ball.owner.pos.z : ball.pos.z;
+        targetPos = new THREE.Vector3(tx, 0, tz);
+        moveSpd = ball.owner ? 5.3 : 5.5;
+      } else {
+        targetPos = new THREE.Vector3(
+          p.homePos.x + Math.sin(now * 0.0008 + p.phase) * 5.5,
+          0,
+          Math.max(-45, Math.min(45, ball.pos.z * 0.52 + p.homePos.z * 0.48))
+        );
+        moveSpd = 2.9;
+      }
 
       const toTarget = targetPos.sub(p.pos);
       const dist = toTarget.length();
       if (dist > 0.35) {
         const dir = toTarget.normalize();
-        const moveSpd = isBallCarrier ? 3.8 : 2.9;
         p.pos.addScaledVector(dir, moveSpd * dt);
         p.rig.group.rotation.y = Math.atan2(dir.x, dir.z);
 
-        const swing = Math.sin(now * 0.011 + p.phase) * 0.55;
+        const swing = Math.sin(now * 0.011 + p.phase) * (moveSpd > 4.4 ? 0.75 : 0.55);
         p.rig.leftLeg.rotation.x = swing;
         p.rig.rightLeg.rotation.x = -swing;
         p.rig.leftArmPivot.rotation.x = -swing * 0.65;
@@ -3062,8 +3140,13 @@ function resetMatchState() {
     stamina: 100,
     selectedPlayer: null,
     activeIncident: null,
-    scenario: null,
-    incidentTimer: 7,
+    duel: null,
+    duelCool: 1.5,
+    offsidePending: null,
+    decide: 1.5,
+    chasers: [],
+    passReceiver: null,
+    passTimer: 0,
     setPiece: null,
     goalCooldown: 0,
     postLogCooldown: 0,
@@ -3105,7 +3188,6 @@ function resetMatchState() {
 
   linesmen.forEach(lm => { lm.flagState = 'down'; });
   state.goalNetRipple = [0, 0];
-  passCooldown = 2.4;
   screenTimer = 0;
   drawScoreScreens();
   updateStats(0, 0, 0);
@@ -3203,14 +3285,19 @@ document.querySelectorAll('#var-overlay button[data-vardec]').forEach(btn => {
       if (state.whistled) toggleWhistle(false);
       addLog('▶️ Le jeu reprend après contrôle VAR.', '');
     } else if (d === 'penalty') {
-      setupSetPiece(restartSpot, 'penalty', benefitingTeam);
+      if (posInBoxOf(restartSpot, offenderTeam)) {
+        setupSetPiece(restartSpot, 'penalty', benefitingTeam);
+      } else {
+        setupSetPiece(restartSpot, 'freekick', benefitingTeam);
+        addLog('⛔ VAR : penalty refusé — faute hors de la surface (coup franc).', 'log-warn');
+      }
       if (inc) clearIncident(false);
     } else if (d === 'foul') {
       setupSetPiece(restartSpot, 'freekick', benefitingTeam);
       if (inc) clearIncident(false);
     } else if (d === 'red') {
       issueCardToPlayer(state.selectedPlayer || (inc ? inc.offender : null), 'red');
-      setupSetPiece(restartSpot, inc && inc.inBox ? 'penalty' : 'freekick', benefitingTeam);
+      setupSetPiece(restartSpot, posInBoxOf(restartSpot, offenderTeam) ? 'penalty' : 'freekick', benefitingTeam);
       if (inc) clearIncident(false);
     }
   });
@@ -3218,7 +3305,9 @@ document.querySelectorAll('#var-overlay button[data-vardec]').forEach(btn => {
 
 function finishMatch() {
   state.started = false;
-  state.scenario = null;
+  state.duel = null;
+  state.offsidePending = null;
+  state.chasers = [];
   audio.blowWhistle(0.85);
   if (document.pointerLockElement) document.exitPointerLock();
   document.getElementById('whistle-menu').classList.add('hidden');
